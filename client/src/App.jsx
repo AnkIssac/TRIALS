@@ -14,16 +14,20 @@ const nextMsgId = () => `m${++msgIdCounter}-${Date.now()}`;
 const CLIENT_ID_KEY = 'doodle-duel-client-id';
 const SESSION_KEY = 'doodle-duel-session';
 
-// A stable per-browser id so a dropped connection (refresh, phone lock,
-// wifi blip) can reclaim the same player slot instead of joining as a new
-// player. Survives page reloads; a private window / cleared storage just
-// means that tab starts a fresh identity, which is fine.
+// A stable per-TAB id so a dropped connection (refresh, phone lock, wifi
+// blip) can reclaim the same player slot instead of joining as a new
+// player. sessionStorage (not localStorage) is deliberate here: it
+// survives a reload of this tab but is NOT shared with other tabs, so
+// opening the game in several tabs of the same browser still gives you
+// several independent players instead of every tab reconnecting as the
+// first one. A private window / cleared storage just starts a fresh
+// identity, which is fine.
 function getOrCreateClientId() {
   try {
-    let id = localStorage.getItem(CLIENT_ID_KEY);
+    let id = sessionStorage.getItem(CLIENT_ID_KEY);
     if (!id) {
       id = crypto.randomUUID?.() ?? `c${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      localStorage.setItem(CLIENT_ID_KEY, id);
+      sessionStorage.setItem(CLIENT_ID_KEY, id);
     }
     return id;
   } catch {
@@ -33,7 +37,7 @@ function getOrCreateClientId() {
 
 function saveSession(session) {
   try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   } catch {
     /* ignore (private browsing, etc.) */
   }
@@ -41,7 +45,7 @@ function saveSession(session) {
 
 function loadSession() {
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
+    const raw = sessionStorage.getItem(SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -50,7 +54,7 @@ function loadSession() {
 
 function clearSession() {
   try {
-    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
   } catch {
     /* ignore */
   }
