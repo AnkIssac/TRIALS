@@ -220,6 +220,12 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
       {isDrawer && (
         <div className="toolbar">
           <div className="toolbar-group">
+            <span className="toolbar-label">Color</span>
+            <span
+              className="current-preview"
+              style={{ background: tool === 'eraser' ? '#ffffff' : color }}
+              aria-hidden="true"
+            />
             {COLORS.map((c) => (
               <button
                 key={c}
@@ -234,6 +240,7 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
             ))}
           </div>
           <div className="toolbar-group">
+            <span className="toolbar-label">Size</span>
             {WIDTHS.map((w) => (
               <button
                 key={w}

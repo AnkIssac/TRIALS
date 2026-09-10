@@ -27,14 +27,16 @@ export default function Chat({ socket, messages, disabled, disabledReason }) {
               key={m.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`chat-msg ${m.system ? 'system' : ''} ${m.correct ? 'correct' : ''} ${m.self ? 'self' : ''}`}
+              className={`chat-msg ${m.system ? 'system' : ''} ${m.correct ? 'correct' : ''} ${m.self ? 'self' : ''} ${m.hint ? 'hint' : ''}`}
             >
-              {m.system ? (
-                <span className="chat-text">{m.text}</span>
+              {m.system || m.hint ? (
+                <span className="chat-text">
+                  {m.hint && '🔥 '}
+                  {m.text}
+                </span>
               ) : (
                 <>
-                  <span className="chat-author">{m.username}:</span>{' '}
-                  <span className="chat-text">{m.hideText ? m.text : m.text}</span>
+                  <span className="chat-author">{m.username}:</span> <span className="chat-text">{m.text}</span>
                 </>
               )}
             </motion.div>

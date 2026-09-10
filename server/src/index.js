@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 
 import { WORD_LIST, pickRandomWords } from './words.js';
-import { calcPoints, normalize, DRAWER_POINTS_PER_GUESSER } from './scoring.js';
+import { calcPoints, normalize, closenessHint, DRAWER_POINTS_PER_GUESSER } from './scoring.js';
 import {
   ROUND_LENGTH_MS,
   CHOICE_TIMEOUT_MS,
@@ -445,6 +445,14 @@ io.on('connection', (socket) => {
       checkAllGuessed(roomId);
     } else {
       io.to(roomId).emit('chat:message', { username: player.username, text, correct: false });
+
+      // A private "so close!" nudge, sent only to this guesser -- it must
+      // never leak to the room, or it'd hand everyone else a free hint
+      // about a guess they didn't make.
+      const hintText = closenessHint(normalize(text), normalize(room.currentWord));
+      if (hintText) {
+        socket.emit('chat:message', { username: 'Hint', text: hintText, hint: true });
+      }
     }
   });
 
