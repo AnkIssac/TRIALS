@@ -69,7 +69,7 @@ static client (Vercel/Netlify) once you're past casual testing, are in
   the round, sent only to non-drawers.
 - **Reconnects**: a browser tab keeps a stable `clientId` in localStorage.
   If your socket drops (refresh, phone lock, wifi blip), the server holds
-  your slot — score, host status, drawer turn — open for 12s. Reconnecting
+  your slot — score, host status, drawer turn — open for 25s. Reconnecting
   within that window (even a full page reload) reclaims it silently; your
   canvas, hint progress, and secret word (if you're drawing) are resent.
   If you don't come back in time, you're removed and, if you were
