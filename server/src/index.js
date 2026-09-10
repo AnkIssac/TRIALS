@@ -729,6 +729,6 @@ function finalizePlayerRemoval(roomId, clientId) {
 }
 
 httpServer.listen(PORT, () => {
-  console.log(`Doodle Duel server listening on :${PORT}`);
+  console.log(`InkBlitz server listening on :${PORT}`);
   console.log(`Allowed client origins: ${ALLOWED_ORIGINS.join(', ')}`);
 });

@@ -36,14 +36,14 @@ export default function Lobby({
   onSetWordList,
   onSetTeams,
 }) {
-  const [username, setUsername] = useState(() => localStorage.getItem('doodle-duel-username') || '');
+  const [username, setUsername] = useState(() => localStorage.getItem('inkblitz-username') || '');
   const [joinCode, setJoinCode] = useState('');
   const [wordListDraft, setWordListDraft] = useState('');
   const avatarRef = useRef(null);
 
   const persistName = (name) => {
     try {
-      localStorage.setItem('doodle-duel-username', name);
+      localStorage.setItem('inkblitz-username', name);
     } catch {
       /* ignore (private browsing, etc.) */
     }
@@ -52,8 +52,8 @@ export default function Lobby({
   if (!joined) {
     return (
       <div className="lobby-card">
-        <h1 className="brand">🎨 Doodle Duel</h1>
-        <p className="tagline">Draw. Guess. Duel your friends.</p>
+        <h1 className="brand">🎨⚡ InkBlitz</h1>
+        <p className="tagline">Draw fast. Guess faster.</p>
 
         <label className="field">
           <span>Your name</span>

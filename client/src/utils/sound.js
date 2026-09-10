@@ -3,7 +3,7 @@
 // happens on the page, so the AudioContext is created lazily on first use
 // (by which point the player has already clicked Create/Join).
 
-const MUTE_KEY = 'doodle-duel-muted';
+const MUTE_KEY = 'inkblitz-muted';
 
 let audioCtx = null;
 

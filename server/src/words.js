@@ -1,4 +1,4 @@
-// Word bank for Doodle Duel.
+// Word bank for InkBlitz.
 // Each entry carries a difficulty tag so the client can show it next to the
 // word choice buttons. Kept as a simple flat array for the MVP -- easy to
 // swap for categories (e.g. WORD_LISTS.animals, WORD_LISTS.food) later.

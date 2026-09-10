@@ -15,8 +15,8 @@ import * as sound from './utils/sound.js';
 let msgIdCounter = 0;
 const nextMsgId = () => `m${++msgIdCounter}-${Date.now()}`;
 
-const CLIENT_ID_KEY = 'doodle-duel-client-id';
-const SESSION_KEY = 'doodle-duel-session';
+const CLIENT_ID_KEY = 'inkblitz-client-id';
+const SESSION_KEY = 'inkblitz-session';
 
 // A stable per-TAB id so a dropped connection (refresh, phone lock, wifi
 // blip) can reclaim the same player slot instead of joining as a new

@@ -26,6 +26,7 @@ export default function PlayerList({
               exit={{ opacity: 0, x: 12 }}
               transition={{ duration: 0.25 }}
               className={`player-row ${p.socketId === drawerId ? 'is-drawer' : ''} ${!p.connected ? 'is-disconnected' : ''} ${teamsEnabled && p.team ? `team-${p.team}` : ''}`}
+              title={`${p.username}${p.socketId === mySocketId ? ' (you)' : ''} — ${p.score}`}
             >
               {p.avatar ? (
                 <img
@@ -72,7 +73,7 @@ export default function PlayerList({
           <span className="field-label">👀 Watching ({spectators.length})</span>
           <ul className="spectator-list">
             {spectators.map((s) => (
-              <li key={s.clientId ?? s.socketId} className="spectator-row">
+              <li key={s.clientId ?? s.socketId} className="spectator-row" title={s.username}>
                 {s.avatar ? (
                   <img src={s.avatar} alt="" className="player-avatar player-avatar-img spectator-avatar" />
                 ) : (

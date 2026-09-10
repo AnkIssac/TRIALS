@@ -513,10 +513,11 @@ input:focus {
 }
 .draw-canvas {
   display: block;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
+  /* Fills its wrapper exactly -- no fixed aspect ratio, no letterboxing.
+     The canvas's actual pixel buffer is sized in JS to match this same
+     box, so this just has to keep the CSS box itself full-size. */
+  width: 100%;
+  height: 100%;
   touch-action: none;
   cursor: default;
   background: white;
@@ -804,7 +805,7 @@ input:focus {
      empty between AnimatePresence children. */
   .sidebar {
     grid-row: 1;
-    max-height: 140px;
+    max-height: 92px;
   }
   .main-stage {
     grid-row: 2;
@@ -812,6 +813,78 @@ input:focus {
   .chat-sidebar {
     grid-row: 3;
     max-height: 260px;
+  }
+
+  /* Player list becomes a horizontal strip of compact chips (avatar +
+     score, name dropped in favor of a hover/long-press title tooltip) so
+     the sidebar row takes way less vertical height, leaving more of the
+     screen for the canvas below it -- the whole point of stacking on a
+     narrow screen in the first place. Scoped to .sidebar (the in-game
+     layout) so the lobby's waiting-room player list, which has plenty of
+     room to spare, keeps showing full names. */
+  .sidebar .player-list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 10px;
+    padding-bottom: 2px;
+  }
+  .sidebar .player-row {
+    position: relative;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 2px;
+    padding: 6px 8px;
+    border-radius: 12px;
+  }
+  .sidebar .player-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 0.85rem;
+  }
+  .sidebar .player-name {
+    display: none;
+  }
+  .sidebar .player-score {
+    font-size: 0.75rem;
+    min-width: 0;
+  }
+  .sidebar .player-badges {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    gap: 0;
+    font-size: 0.65rem;
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 1px 2px;
+    box-shadow: var(--shadow-sm);
+  }
+  .sidebar .reconnecting-tag {
+    display: none;
+  }
+  .sidebar .spectator-section {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+  .sidebar .spectator-section .field-label {
+    font-size: 0.7rem;
+  }
+  .sidebar .spectator-list {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .sidebar .spectator-row {
+    flex-shrink: 0;
+    padding: 4px 6px;
+  }
+  .sidebar .spectator-row .player-name {
+    display: none;
+  }
+  .sidebar .spectator-row .join-game-btn {
+    margin-left: 0;
   }
   .word-hint {
     margin-left: 0;
@@ -849,6 +922,36 @@ input:focus {
     grid-row: auto;
     grid-column: 1;
     max-height: none;
+  }
+  /* This is a side column here, not a stacked row -- undo the ≤900px
+     block's horizontal-chip-strip treatment (that one's for when the
+     sidebar is squeezed into a full-width row above the canvas) and go
+     back to a normal vertical list with visible names. */
+  .sidebar .player-list {
+    flex-direction: column;
+    overflow-x: visible;
+    overflow-y: visible;
+  }
+  .sidebar .player-row {
+    flex-direction: row;
+    padding: 8px 10px;
+  }
+  .sidebar .player-name {
+    display: block;
+  }
+  .sidebar .player-badges {
+    position: static;
+    background: none;
+    box-shadow: none;
+    padding: 0;
+    font-size: 0.85rem;
+  }
+  .sidebar .spectator-list {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+  .sidebar .spectator-row .player-name {
+    display: block;
   }
   .main-stage {
     grid-row: auto;

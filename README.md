@@ -1,9 +1,9 @@
-# 🎨 Doodle Duel
+# 🎨⚡ InkBlitz
 
 A real-time multiplayer drawing-and-guessing party game (Skribbl-style).
 One player draws a secret word while everyone else races to guess it in the
-live chat. See [`CLAUDE.md`](./CLAUDE.md) for the full project brief this
-was built from.
+live chat — faster guesses score more. See [`CLAUDE.md`](./CLAUDE.md) for
+the original project brief this was built from.
 
 ## Stack
 - **Client**: React + Vite, Framer Motion, Socket.IO client
@@ -12,7 +12,7 @@ was built from.
 
 ## Project layout
 ```
-doodle-duel/
+inkblitz/
 ├── client/   # Vite React app
 ├── server/   # Express + Socket.IO server
 └── CLAUDE.md # original project brief
@@ -36,7 +36,7 @@ npm run dev         # http://localhost:5173
 
 Open `http://localhost:5173` in 2-3 browser tabs to simulate multiple
 players: create a room in one tab, then join with the room code in the
-others.
+others. Works on phones and tablets too — see "Playing with friends" below.
 
 ## Playing with friends
 
@@ -49,31 +49,52 @@ others.
   it to the server's `CLIENT_URL`.
 
 Full details, plus notes on deploying a persistent server (Render) and
-static client (Vercel/Netlify) once you're past casual testing, are in
-[`CLAUDE.md`](./CLAUDE.md).
+static client (Vercel/Netlify) whenever you're ready to grab a permanent
+link, are in [`CLAUDE.md`](./CLAUDE.md).
+
+## Features
+
+- **Rooms** with a shareable code, host controls, custom word lists, and
+  configurable round length / rounds-per-player
+- **Drawing tools**: pen, paint-bucket fill, eraser, color palette, stroke
+  width, undo, clear — all synced live to everyone in the room
+- **Scoring**: faster correct guesses earn more points; the drawer earns a
+  bonus per correct guesser; optional team mode pools scores by team
+- **Hints**: a letter or two reveals itself as the timer runs down, and a
+  guesser gets a private "so close!" nudge on a near-miss guess
+- **Player avatars**: draw your own little avatar before you join, or skip
+  it for the default colored-initial one
+- **Reactions**: quick-tap emoji bursts during a round, no chat needed
+- **Spectator mode**: join mid-round and watch, then hop into the next
+  round whenever you're ready
+- **Reconnects**: your slot (score, host status, drawer turn) is held open
+  for 25s if your connection drops — a refresh reclaims it silently
+- **Sound + confetti**, mutable, plus a mobile/tablet-friendly layout that
+  fills whatever screen shape you've got — phone, rotated phone, tablet,
+  laptop
 
 ## How it works
 
-- **Canvas sync**: strokes are sent as `{ type, x, y, color, width }`
-  coordinate events, never image frames — every client redraws the same
-  lines locally. The server keeps the current round's stroke list so
-  late joiners can replay it instead of staring at a blank canvas.
+- **Canvas sync**: every client sizes its own canvas to whatever
+  rectangle it actually has — no fixed aspect ratio, no letterboxing.
+  Strokes are relayed as `{ type, x, y, color, width }` where x/y/width
+  are 0-1 fractions of *that client's own canvas*, not raw pixels or
+  images — each client converts a fraction to its own pixel space when
+  drawing, which is what keeps a stroke lining up correctly even though
+  everyone's canvas is a different physical size. The server keeps the
+  current round's stroke list so late joiners (and a resized/rotated
+  canvas) can replay it instead of staring at a blank canvas.
 - **Turn rotation**: the server rotates the drawer, offers 3 random word
   choices (with a 10s auto-pick fallback), and is authoritative on the
   round timer regardless of what any client displays.
 - **Scoring**: faster correct guesses earn more points (500 → 50 floor,
   linear falloff over the round); the drawer earns a flat bonus per
   correct guesser. A round ends early once everyone's guessed.
-- **Hints**: the server reveals a letter or two (up to 2, only for words
-  long enough that it doesn't give the game away) at 40% and 70% through
-  the round, sent only to non-drawers.
-- **Reconnects**: a browser tab keeps a stable `clientId` in localStorage.
-  If your socket drops (refresh, phone lock, wifi blip), the server holds
-  your slot — score, host status, drawer turn — open for 25s. Reconnecting
-  within that window (even a full page reload) reclaims it silently; your
-  canvas, hint progress, and secret word (if you're drawing) are resent.
-  If you don't come back in time, you're removed and, if you were
-  drawing, the round ends and rotates to the next player.
+- **Reconnects**: a browser tab keeps a stable `clientId` in
+  sessionStorage (per-tab, so several tabs in one browser act as separate
+  players). If your socket drops, the server holds your slot open for
+  25s; reconnecting within that window — even a full page reload —
+  reclaims it silently.
 
 ## Build order this repo follows
 
@@ -82,4 +103,5 @@ static client (Vercel/Netlify) once you're past casual testing, are in
 3. Guess chat + correct-answer detection
 4. Turn rotation, word choice, round timer
 5. Scoring + leaderboard
-6. Polish (Framer Motion transitions, mobile layout)
+6. Polish: hints, reconnects, fill/undo, custom word lists, avatars,
+   reactions, spectator mode, team mode, mobile/tablet layout

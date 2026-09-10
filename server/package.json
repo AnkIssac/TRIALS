@@ -1,7 +1,7 @@
 {
-  "name": "doodle-duel-server",
+  "name": "inkblitz-server",
   "version": "1.0.0",
-  "description": "Realtime server for Doodle Duel - a Skribbl-style drawing & guessing game",
+  "description": "Realtime server for InkBlitz - a Skribbl-style drawing & guessing game",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
