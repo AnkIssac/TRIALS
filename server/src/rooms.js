@@ -9,7 +9,7 @@ export const CHOICE_TIMEOUT_MS = 10_000; // 10s to pick a word
 export const ROUNDS_PER_PLAYER = 2; // each player draws this many times per game
 export const MIN_PLAYERS_TO_START = 2;
 // Overridable via env for testing; production should just use the default.
-export const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS) || 25_000;
+export const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS) || 12_000;
 export const AVATAR_COLORS = [
   '#f94144', '#f3722c', '#f8961e', '#f9c74f', '#90be6d',
   '#43aa8b', '#4d908e', '#577590', '#277da1', '#9b5de5',
