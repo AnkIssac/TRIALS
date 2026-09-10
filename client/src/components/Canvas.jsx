@@ -50,6 +50,95 @@ function fillWhite(ctx) {
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 }
 
+function hexToRgba(hex) {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16), 255];
+}
+
+function pixelMatches(data, idx, [r, g, b, a], tolerance) {
+  return (
+    Math.abs(data[idx] - r) <= tolerance &&
+    Math.abs(data[idx + 1] - g) <= tolerance &&
+    Math.abs(data[idx + 2] - b) <= tolerance &&
+    Math.abs(data[idx + 3] - a) <= tolerance
+  );
+}
+
+// Paint-bucket style flood fill: replaces the clicked region (and every
+// contiguous pixel close enough in color -- a tolerance so it doesn't stop
+// dead at an anti-aliased stroke edge) with the chosen color. Runs
+// identically on every client since it only needs the same click point +
+// color that gets relayed, same as a stroke.
+function floodFill(ctx, startX, startY, fillHex) {
+  const x0 = Math.round(startX);
+  const y0 = Math.round(startY);
+  if (x0 < 0 || y0 < 0 || x0 >= CANVAS_WIDTH || y0 >= CANVAS_HEIGHT) return;
+
+  const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const data = imageData.data;
+  const fillColor = hexToRgba(fillHex);
+  const startIdx = (y0 * CANVAS_WIDTH + x0) * 4;
+  const targetColor = [data[startIdx], data[startIdx + 1], data[startIdx + 2], data[startIdx + 3]];
+
+  if (pixelMatches(data, startIdx, fillColor, 16)) return; // already this color
+
+  const TOLERANCE = 48;
+  const visited = new Uint8Array(CANVAS_WIDTH * CANVAS_HEIGHT);
+  const stack = [[x0, y0]];
+
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) continue;
+
+    const pixelPos = y * CANVAS_WIDTH + x;
+    if (visited[pixelPos]) continue;
+
+    const idx = pixelPos * 4;
+    if (!pixelMatches(data, idx, targetColor, TOLERANCE)) continue;
+
+    visited[pixelPos] = 1;
+    data[idx] = fillColor[0];
+    data[idx + 1] = fillColor[1];
+    data[idx + 2] = fillColor[2];
+    data[idx + 3] = fillColor[3];
+
+    stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// Shared replay used for both a late-joiner's initial catch-up and a
+// freshly (re)synced draw:history payload -- interprets the same stroke
+// shape draw:stroke relays, fill events included.
+function replayActions(ctx, actions) {
+  fillWhite(ctx);
+  let lastPoint = null;
+  let lastColor = '#1e1e1e';
+  let lastWidth = 4;
+  for (const a of actions) {
+    if (a.type === 'start') {
+      lastPoint = { x: a.x, y: a.y };
+      lastColor = a.color;
+      lastWidth = a.width;
+    } else if (a.type === 'move' && lastPoint) {
+      const point = { x: a.x, y: a.y };
+      drawLine(ctx, lastPoint, point, a.color, a.width);
+      lastPoint = point;
+    } else if (a.type === 'end') {
+      // See the matching comment where 'end' is handled live -- the
+      // closing point has to be drawn here too, using whatever color/width
+      // this stroke was using, since the 'end' entry itself carries neither.
+      if (lastPoint && a.x !== undefined && a.y !== undefined) {
+        drawLine(ctx, lastPoint, { x: a.x, y: a.y }, lastColor, lastWidth);
+      }
+      lastPoint = null;
+    } else if (a.type === 'fill') {
+      floodFill(ctx, a.x, a.y, a.color);
+      lastPoint = null;
+    }
+  }
+}
+
 export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes }) {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
@@ -61,7 +150,7 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
 
   const [color, setColor] = useState('#1e1e1e');
   const [width, setWidth] = useState(6);
-  const [tool, setTool] = useState('pen'); // 'pen' | 'eraser'
+  const [tool, setTool] = useState('pen'); // 'pen' | 'fill' | 'eraser'
 
   const activeColor = tool === 'eraser' ? 'eraser' : color;
 
@@ -77,20 +166,7 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
   useEffect(() => {
     const ctx = ctxRef.current;
     if (!ctx || !initialStrokes || initialStrokes.length === 0) return;
-
-    fillWhite(ctx);
-    let lp = null;
-    for (const s of initialStrokes) {
-      if (s.type === 'start') {
-        lp = { x: s.x, y: s.y };
-      } else if (s.type === 'move' && lp) {
-        const p = { x: s.x, y: s.y };
-        drawLine(ctx, lp, p, s.color, s.width);
-        lp = p;
-      } else if (s.type === 'end') {
-        lp = null;
-      }
-    }
+    replayActions(ctx, initialStrokes);
   }, [initialStrokes]);
 
   // Listen for remote strokes / clears from the server relay.
@@ -111,6 +187,18 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
         }
         remoteLastPointRef.current = point;
       } else if (data.type === 'end') {
+        // The final 'move' toward this point may still be sitting in the
+        // sender's throttle queue when they lift the pen -- 'end' isn't
+        // throttled, so it can arrive first. Carrying the closing
+        // coordinates here guarantees the last segment actually gets
+        // drawn instead of leaving a gap (fatal for the fill tool: paint
+        // leaks straight through a one-pixel hole in an "enclosed" shape).
+        if (remoteLastPointRef.current && data.x !== undefined && data.y !== undefined) {
+          drawLine(ctx, remoteLastPointRef.current, { x: data.x, y: data.y }, remoteColorRef.current, remoteWidthRef.current);
+        }
+        remoteLastPointRef.current = null;
+      } else if (data.type === 'fill') {
+        floodFill(ctx, data.x, data.y, data.color);
         remoteLastPointRef.current = null;
       }
     };
@@ -123,19 +211,7 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
     const handleHistory = ({ strokes }) => {
       const ctx = ctxRef.current;
       if (!ctx) return;
-      fillWhite(ctx);
-      let lp = null;
-      for (const s of strokes) {
-        if (s.type === 'start') {
-          lp = { x: s.x, y: s.y };
-        } else if (s.type === 'move' && lp) {
-          const p = { x: s.x, y: s.y };
-          drawLine(ctx, lp, p, s.color, s.width);
-          lp = p;
-        } else if (s.type === 'end') {
-          lp = null;
-        }
-      }
+      replayActions(ctx, strokes);
     };
 
     // A fresh round means a blank canvas, whether or not I'm the drawer.
@@ -168,10 +244,20 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
 
   const handlePointerDown = (e) => {
     if (!isDrawer) return;
+    const point = getCanvasCoords(e);
+
+    if (tool === 'fill') {
+      // A single click, not a drag -- fill locally now, then relay the same
+      // click point + color for everyone else (and late joiners) to replay.
+      const ctx = ctxRef.current;
+      floodFill(ctx, point.x, point.y, color);
+      socket.emit('draw:stroke', { type: 'fill', x: point.x, y: point.y, color });
+      return;
+    }
+
     const canvas = canvasRef.current;
     canvas.setPointerCapture(e.pointerId);
     isPointerDownRef.current = true;
-    const point = getCanvasCoords(e);
     lastPointRef.current = point;
     socket.emit('draw:stroke', { type: 'start', ...point, color: activeColor, width });
   };
@@ -190,8 +276,11 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
   const handlePointerUp = () => {
     if (!isDrawer) return;
     isPointerDownRef.current = false;
+    const finalPoint = lastPointRef.current;
     lastPointRef.current = null;
-    socket.emit('draw:stroke', { type: 'end' });
+    // Carry the closing point -- see the matching comment on the 'end'
+    // handler for why this can't just be an empty { type: 'end' }.
+    socket.emit('draw:stroke', finalPoint ? { type: 'end', ...finalPoint } : { type: 'end' });
   };
 
   const handleClear = () => {
@@ -220,45 +309,58 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
       {isDrawer && (
         <div className="toolbar">
           <div className="toolbar-group">
+            <span className="toolbar-label">Tool</span>
+            <button
+              className={`tool-btn ${tool === 'pen' ? 'active' : ''}`}
+              onClick={() => setTool('pen')}
+              aria-label="Pen"
+            >
+              ✏️ Draw
+            </button>
+            <button
+              className={`tool-btn ${tool === 'fill' ? 'active' : ''}`}
+              onClick={() => setTool('fill')}
+              aria-label="Fill"
+            >
+              🪣 Fill
+            </button>
+            <button
+              className={`tool-btn ${tool === 'eraser' ? 'active' : ''}`}
+              onClick={() => setTool('eraser')}
+              aria-label="Eraser"
+            >
+              🧽 Eraser
+            </button>
+          </div>
+          <div className="toolbar-group">
             <span className="toolbar-label">Color</span>
-            <span
-              className="current-preview"
-              style={{ background: tool === 'eraser' ? '#ffffff' : color }}
-              aria-hidden="true"
-            />
+            <span className="current-preview" style={{ background: color }} aria-hidden="true" />
             {COLORS.map((c) => (
               <button
                 key={c}
-                className={`swatch ${tool === 'pen' && color === c ? 'active' : ''}`}
+                className={`swatch ${color === c ? 'active' : ''}`}
                 style={{ background: c, borderColor: c === '#ffffff' ? '#ccc' : c }}
-                onClick={() => {
-                  setColor(c);
-                  setTool('pen');
-                }}
+                onClick={() => setColor(c)}
                 aria-label={`color ${c}`}
               />
             ))}
           </div>
+          {tool !== 'fill' && (
+            <div className="toolbar-group">
+              <span className="toolbar-label">Size</span>
+              {WIDTHS.map((w) => (
+                <button
+                  key={w}
+                  className={`width-btn ${width === w ? 'active' : ''}`}
+                  onClick={() => setWidth(w)}
+                  aria-label={`width ${w}`}
+                >
+                  <span style={{ width: w, height: w }} className="width-dot" />
+                </button>
+              ))}
+            </div>
+          )}
           <div className="toolbar-group">
-            <span className="toolbar-label">Size</span>
-            {WIDTHS.map((w) => (
-              <button
-                key={w}
-                className={`width-btn ${width === w ? 'active' : ''}`}
-                onClick={() => setWidth(w)}
-                aria-label={`width ${w}`}
-              >
-                <span style={{ width: w, height: w }} className="width-dot" />
-              </button>
-            ))}
-          </div>
-          <div className="toolbar-group">
-            <button
-              className={`tool-btn ${tool === 'eraser' ? 'active' : ''}`}
-              onClick={() => setTool((t) => (t === 'eraser' ? 'pen' : 'eraser'))}
-            >
-              🧽 Eraser
-            </button>
             <button className="tool-btn danger" onClick={handleClear}>
               🗑️ Clear
             </button>
