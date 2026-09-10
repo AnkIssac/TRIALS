@@ -48,11 +48,15 @@ export function createRoom(roomId) {
     roundNumber: 0,
     maxRounds: 0, // set once players are known, at game start
     strokes: [], // strokes for the *current* round, for late joiners
+    strokeActionStarts: [], // index into `strokes` where each undo-able action began
     revealedHintIndices: new Set(), // letter indices revealed so far this round
     roundTimer: null,
     choiceTimeout: null,
     hintTimers: [], // pending reveal-a-letter timeouts for the current round
     pendingRemovals: new Map(), // clientId -> timeout, for players in their reconnect grace window
+    customWords: [], // host-supplied word list; falls back to the default WORD_LIST when empty
+    roundLengthMs: ROUND_LENGTH_MS, // per-room, host-configurable copy of the default
+    roundsPerPlayer: ROUNDS_PER_PLAYER, // per-room, host-configurable copy of the default
   };
   rooms.set(roomId, room);
   return room;
@@ -168,6 +172,9 @@ export function publicRoomState(room) {
     roundNumber: room.roundNumber,
     maxRounds: room.maxRounds,
     drawerId: getDrawer(room)?.socketId ?? null,
+    customWordCount: room.customWords.length,
+    roundLengthMs: room.roundLengthMs,
+    roundsPerPlayer: room.roundsPerPlayer,
   };
 }
 

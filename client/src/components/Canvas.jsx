@@ -224,11 +224,16 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
     socket.on('draw:stroke', handleStroke);
     socket.on('draw:clear', handleClear);
     socket.on('draw:history', handleHistory);
+    // An undo can't surgically erase one stroke off a raster canvas, so the
+    // server just sends back the (now shorter) full history and everyone
+    // wipes + replays it -- identical shape to draw:history's catch-up.
+    socket.on('draw:undo', handleHistory);
     socket.on('round:start', handleRoundStart);
     return () => {
       socket.off('draw:stroke', handleStroke);
       socket.off('draw:clear', handleClear);
       socket.off('draw:history', handleHistory);
+      socket.off('draw:undo', handleHistory);
       socket.off('round:start', handleRoundStart);
     };
   }, [socket]);
@@ -288,6 +293,15 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
     const ctx = ctxRef.current;
     fillWhite(ctx);
     socket.emit('draw:clear');
+  };
+
+  const handleUndo = () => {
+    if (!isDrawer) return;
+    // No local-optimistic redraw here -- the server holds the actual
+    // stroke history (needed for late joiners anyway), so undo waits for
+    // its reply rather than guessing what the canvas looked like a stroke
+    // ago. A short round-trip, not the instant feel drawing itself has.
+    socket.emit('draw:undo');
   };
 
   return (
@@ -361,6 +375,9 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
             </div>
           )}
           <div className="toolbar-group">
+            <button className="tool-btn" onClick={handleUndo}>
+              ↩️ Undo
+            </button>
             <button className="tool-btn danger" onClick={handleClear}>
               🗑️ Clear
             </button>

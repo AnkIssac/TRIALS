@@ -3,6 +3,15 @@ import PlayerList from './PlayerList.jsx';
 import AvatarPicker from './AvatarPicker.jsx';
 
 const MIN_PLAYERS_TO_START = 2;
+const ROUND_LENGTH_OPTIONS = [
+  { value: 30_000, label: '30s' },
+  { value: 45_000, label: '45s' },
+  { value: 60_000, label: '60s' },
+  { value: 80_000, label: '80s' },
+  { value: 90_000, label: '90s' },
+  { value: 120_000, label: '120s' },
+];
+const ROUNDS_PER_PLAYER_OPTIONS = [1, 2, 3, 4, 5];
 
 /**
  * Covers both pre-join screens: the create/join form (`joined === false`)
@@ -16,12 +25,18 @@ export default function Lobby({
   hostId,
   mySocketId,
   errorMessage,
+  roundLengthMs,
+  roundsPerPlayer,
+  customWordCount,
   onCreate,
   onJoin,
   onStart,
+  onSetSettings,
+  onSetWordList,
 }) {
   const [username, setUsername] = useState(() => localStorage.getItem('doodle-duel-username') || '');
   const [joinCode, setJoinCode] = useState('');
+  const [wordListDraft, setWordListDraft] = useState('');
   const avatarRef = useRef(null);
 
   const persistName = (name) => {
@@ -97,6 +112,66 @@ export default function Lobby({
       <p className="hint">Share this code with friends so they can join.</p>
 
       <PlayerList players={players} hostId={hostId} drawerId={null} mySocketId={mySocketId} />
+
+      <div className="game-settings">
+        <span className="field-label">Game Settings</span>
+        {isHost ? (
+          <div className="settings-row">
+            <label className="settings-field">
+              <span>Round length</span>
+              <select
+                value={roundLengthMs}
+                onChange={(e) => onSetSettings({ roundLengthMs: Number(e.target.value) })}
+              >
+                {ROUND_LENGTH_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="settings-field">
+              <span>Rounds/player</span>
+              <select
+                value={roundsPerPlayer}
+                onChange={(e) => onSetSettings({ roundsPerPlayer: Number(e.target.value) })}
+              >
+                {ROUNDS_PER_PLAYER_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : (
+          <p className="hint">
+            {Math.round(roundLengthMs / 1000)}s rounds &middot; {roundsPerPlayer} round{roundsPerPlayer === 1 ? '' : 's'}{' '}
+            per player
+          </p>
+        )}
+      </div>
+
+      <div className="word-list-settings">
+        <span className="field-label">Custom Word List</span>
+        <p className="hint">
+          {customWordCount > 0 ? `Using ${customWordCount} custom words` : 'Using the default word list'}
+        </p>
+        {isHost && (
+          <>
+            <textarea
+              className="word-list-textarea"
+              value={wordListDraft}
+              onChange={(e) => setWordListDraft(e.target.value)}
+              placeholder="Type your own words, separated by commas or new lines (leave blank to use the default list)"
+              rows={3}
+            />
+            <button type="button" onClick={() => onSetWordList(wordListDraft)}>
+              Save Word List
+            </button>
+          </>
+        )}
+      </div>
 
       {isHost ? (
         <button className="primary" disabled={!canStart} onClick={onStart}>

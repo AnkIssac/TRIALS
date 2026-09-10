@@ -80,3 +80,36 @@ export function pickRandomWords(wordList, usedWords, count) {
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
 }
+
+export const MIN_CUSTOM_WORDS = 3;
+const MAX_CUSTOM_WORDS = 200;
+const MAX_CUSTOM_WORD_LENGTH = 30;
+
+/**
+ * Turns a host's free-text word list (comma or newline separated) into the
+ * same { word, difficulty } shape as WORD_LIST. There's no real difficulty
+ * data for custom words, so it's guessed from length -- good enough for the
+ * choice-screen tag, not meant to be precise. Returns [] if `raw` yields no
+ * usable words; the caller decides what an empty result means (clear vs.
+ * reject).
+ */
+export function parseCustomWordList(raw) {
+  if (typeof raw !== 'string') return [];
+
+  const seen = new Set();
+  const words = [];
+
+  for (const candidate of raw.split(/[,\n]/)) {
+    const word = candidate.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!word || word.length > MAX_CUSTOM_WORD_LENGTH) continue;
+    if (!/^[a-z0-9' -]+$/.test(word)) continue; // keep it to plausible word characters
+    if (seen.has(word)) continue;
+    seen.add(word);
+
+    const difficulty = word.length <= 4 ? 'easy' : word.length <= 8 ? 'medium' : 'hard';
+    words.push({ word, difficulty });
+    if (words.length >= MAX_CUSTOM_WORDS) break;
+  }
+
+  return words;
+}

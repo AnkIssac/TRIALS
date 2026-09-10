@@ -7,6 +7,8 @@ import Canvas from './components/Canvas.jsx';
 import Chat from './components/Chat.jsx';
 import PlayerList from './components/PlayerList.jsx';
 import Timer from './components/Timer.jsx';
+import Confetti from './components/Confetti.jsx';
+import * as sound from './utils/sound.js';
 
 let msgIdCounter = 0;
 const nextMsgId = () => `m${++msgIdCounter}-${Date.now()}`;
@@ -78,6 +80,15 @@ export default function App() {
   const [roundEndInfo, setRoundEndInfo] = useState(null);
   const [finalScores, setFinalScores] = useState(null);
   const [hintMask, setHintMask] = useState(null);
+  const [confetti, setConfetti] = useState({ key: 0, big: false });
+  const [muted, setMutedState] = useState(() => sound.isMuted());
+
+  const fireConfetti = (big) => setConfetti((c) => ({ key: c.key + 1, big }));
+  const toggleMuted = () => {
+    const next = !muted;
+    sound.setMuted(next);
+    setMutedState(next);
+  };
 
   const roomStateRef = useRef(roomState);
   roomStateRef.current = roomState;
@@ -138,6 +149,7 @@ export default function App() {
       setStrokeHistory(null);
       setHintMask(hint ?? null);
       setRoundKey((k) => k + 1);
+      sound.playRoundStart();
     };
 
     const onRoundWord = ({ word }) => setMyWord(word);
@@ -147,6 +159,14 @@ export default function App() {
 
     const onChatMessage = (msg) => {
       setMessages((prev) => [...prev.slice(-99), { ...msg, id: nextMsgId() }]);
+      if (msg.correct) {
+        if (msg.self) {
+          sound.playYouGotIt();
+          fireConfetti(false);
+        } else if (!msg.system) {
+          sound.playCorrectGuess();
+        }
+      }
     };
 
     const onRoundEnd = ({ word, scores, reason }) => {
@@ -158,6 +178,8 @@ export default function App() {
     const onGameEnd = ({ finalScores: fs }) => {
       setFinalScores(fs);
       setRoundEndInfo(null);
+      sound.playVictory();
+      fireConfetti(true);
     };
 
     socket.on('connect', onConnect);
@@ -207,6 +229,8 @@ export default function App() {
 
   const handleStart = () => socket.emit('game:start');
   const handlePickWord = (word) => socket.emit('word:pick', { word });
+  const handleSetSettings = (settings) => socket.emit('room:setSettings', settings);
+  const handleSetWordList = (words) => socket.emit('room:setWordList', { words });
 
   if (!connected) {
     return (
@@ -231,9 +255,14 @@ export default function App() {
           hostId={roomState?.hostId}
           mySocketId={mySocketId}
           errorMessage={errorMessage}
+          roundLengthMs={roomState?.roundLengthMs ?? 80_000}
+          roundsPerPlayer={roomState?.roundsPerPlayer ?? 2}
+          customWordCount={roomState?.customWordCount ?? 0}
           onCreate={handleCreate}
           onJoin={handleJoin}
           onStart={handleStart}
+          onSetSettings={handleSetSettings}
+          onSetWordList={handleSetWordList}
         />
       </div>
     );
@@ -243,6 +272,7 @@ export default function App() {
     const isHost = roomState.hostId === mySocketId;
     return (
       <div className="app-shell centered">
+        <Confetti burstKey={confetti.key} big={confetti.big} />
         <motion.div className="lobby-card game-end-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1>🏆 Final Scores</h1>
           <ol className="final-scores">
@@ -277,12 +307,13 @@ export default function App() {
   // choosing / drawing / round-end: the main game screen
   return (
     <div className="app-shell game-layout">
+      <Confetti burstKey={confetti.key} big={confetti.big} />
       <header className="game-header">
         <div className="room-pill">Room {roomState.roomId}</div>
         <div className="round-pill">
           Round {roomState.roundNumber}/{roomState.maxRounds}
         </div>
-        {phase === 'drawing' && <Timer timeLimitMs={timeLimit} roundKey={roundKey} />}
+        {phase === 'drawing' && <Timer timeLimitMs={timeLimit} roundKey={roundKey} onTick={sound.playTick} />}
         {phase === 'drawing' && (
           <div className="word-hint">
             {isDrawer
@@ -300,6 +331,16 @@ export default function App() {
                   )}
           </div>
         )}
+        <button
+          type="button"
+          className="mute-toggle"
+          style={{ marginLeft: phase === 'drawing' ? 0 : 'auto' }}
+          onClick={toggleMuted}
+          aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+          title={muted ? 'Unmute sound' : 'Mute sound'}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
       </header>
 
       <div className="game-body">

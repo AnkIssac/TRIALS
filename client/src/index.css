@@ -239,6 +239,58 @@ input:focus {
   overflow-y: auto;
 }
 
+/* ---------- Game settings / custom word list (waiting room) ---------- */
+.game-settings,
+.word-list-settings {
+  text-align: left;
+  background: #faf7fd;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.settings-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.settings-field select {
+  font-family: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 2px solid var(--border);
+  background: white;
+}
+.word-list-settings .hint {
+  margin: 2px 0 8px;
+}
+.word-list-textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: white;
+  resize: vertical;
+  margin-bottom: 8px;
+}
+.word-list-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
 /* ---------- Player list ---------- */
 .player-list {
   list-style: none;
@@ -698,4 +750,31 @@ input:focus {
   .word-hint {
     margin-left: 0;
   }
+}
+
+/* ---------- Confetti ---------- */
+.confetti-layer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 50;
+}
+.confetti-piece {
+  position: absolute;
+  top: -10px;
+}
+
+/* ---------- Mute toggle ---------- */
+.mute-toggle {
+  padding: 6px 10px;
+  font-size: 1rem;
+  line-height: 1;
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.22);
+  border-color: transparent;
+  color: white;
+}
+.mute-toggle:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.32);
 }

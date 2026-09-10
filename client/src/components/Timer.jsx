@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
  * of truth and ends the round on its own timer regardless of what this
  * shows -- so there's no need to sync a tick every second over the wire.
  */
-export default function Timer({ timeLimitMs, roundKey }) {
+export default function Timer({ timeLimitMs, roundKey, onTick }) {
   const [timeLeft, setTimeLeft] = useState(timeLimitMs ? Math.ceil(timeLimitMs / 1000) : 0);
 
   useEffect(() => {
@@ -16,6 +16,14 @@ export default function Timer({ timeLimitMs, roundKey }) {
     if (timeLeft <= 0) return;
     const id = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
     return () => clearTimeout(id);
+  }, [timeLeft]);
+
+  // Fire once per tick of the last stretch, for a countdown sound -- the
+  // effect above already re-triggers every second, this just also reports
+  // it upward without owning any extra timing of its own.
+  useEffect(() => {
+    if (timeLeft > 0 && timeLeft <= 10) onTick?.(timeLeft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft]);
 
   const isLow = timeLeft <= 10;

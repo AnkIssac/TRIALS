@@ -4,12 +4,10 @@ import cors from 'cors';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 
-import { WORD_LIST, pickRandomWords } from './words.js';
+import { WORD_LIST, pickRandomWords, parseCustomWordList, MIN_CUSTOM_WORDS } from './words.js';
 import { calcPoints, normalize, closenessHint, DRAWER_POINTS_PER_GUESSER } from './scoring.js';
 import {
-  ROUND_LENGTH_MS,
   CHOICE_TIMEOUT_MS,
-  ROUNDS_PER_PLAYER,
   MIN_PLAYERS_TO_START,
   RECONNECT_GRACE_MS,
   generateRoomId,
@@ -40,6 +38,11 @@ if (!ALLOWED_ORIGINS.includes('http://localhost:5173')) {
 const ROUND_END_PAUSE_MS = 5000; // time between round:end and the next word choice
 const ALL_GUESSED_GRACE_MS = 1200; // let the last "Correct!" message land before ending
 const HINT_FRACTIONS = [0.4, 0.7]; // reveal a letter at 40% and 70% of the round elapsed
+
+const MIN_ROUND_LENGTH_MS = 30_000;
+const MAX_ROUND_LENGTH_MS = 120_000;
+const MIN_ROUNDS_PER_PLAYER = 1;
+const MAX_ROUNDS_PER_PLAYER = 5;
 
 const app = express();
 app.use(cors({ origin: ALLOWED_ORIGINS }));
@@ -105,7 +108,7 @@ function scheduleHints(roomId, word) {
   const drawer = getDrawer(room);
 
   hintIndices.forEach((idx, i) => {
-    const delay = ROUND_LENGTH_MS * (HINT_FRACTIONS[i] ?? HINT_FRACTIONS[HINT_FRACTIONS.length - 1]);
+    const delay = room.roundLengthMs * (HINT_FRACTIONS[i] ?? HINT_FRACTIONS[HINT_FRACTIONS.length - 1]);
     const timer = setTimeout(() => {
       const r = getRoom(roomId);
       // Bail if the round has already moved on (ended early, next word, etc).
@@ -139,7 +142,7 @@ function sendRoundCatchUp(socket, room) {
     socket.emit('round:start', {
       drawerId: drawer.socketId,
       wordLength: room.currentWord.length,
-      timeLimit: ROUND_LENGTH_MS,
+      timeLimit: room.roundLengthMs,
       roundNumber: room.roundNumber,
       maxRounds: room.maxRounds,
       hint: buildHintMask(room.currentWord, room.revealedHintIndices),
@@ -170,8 +173,10 @@ function startNextRound(roomId) {
   room.phase = 'choosing';
   room.currentWord = null;
   room.strokes = [];
+  room.strokeActionStarts = [];
 
-  const choices = pickRandomWords(WORD_LIST, room.usedWords, 3);
+  const wordSource = room.customWords.length > 0 ? room.customWords : WORD_LIST;
+  const choices = pickRandomWords(wordSource, room.usedWords, Math.min(3, wordSource.length));
   room.currentWordChoices = choices;
 
   io.to(drawer.socketId).emit('word:choices', { choices });
@@ -198,6 +203,7 @@ function selectWord(roomId, word) {
   room.phase = 'drawing';
   room.roundStartedAt = Date.now();
   room.strokes = [];
+  room.strokeActionStarts = [];
   room.revealedHintIndices = new Set();
   clearHintTimers(room);
   room.players.forEach((p) => {
@@ -207,7 +213,7 @@ function selectWord(roomId, word) {
   io.to(roomId).emit('round:start', {
     drawerId: drawer.socketId,
     wordLength: word.length,
-    timeLimit: ROUND_LENGTH_MS,
+    timeLimit: room.roundLengthMs,
     roundNumber: room.roundNumber,
     maxRounds: room.maxRounds,
     hint: buildHintMask(word, room.revealedHintIndices),
@@ -216,7 +222,7 @@ function selectWord(roomId, word) {
   broadcastRoomState(roomId);
 
   clearTimeout(room.roundTimer);
-  room.roundTimer = setTimeout(() => endRound(roomId, 'timeout'), ROUND_LENGTH_MS);
+  room.roundTimer = setTimeout(() => endRound(roomId, 'timeout'), room.roundLengthMs);
   scheduleHints(roomId, word);
 }
 
@@ -232,6 +238,7 @@ function endRound(roomId, reason) {
   const revealedWord = room.currentWord;
   room.phase = 'round-end';
   room.strokes = [];
+  room.strokeActionStarts = [];
 
   io.to(roomId).emit('round:end', {
     word: revealedWord,
@@ -260,6 +267,7 @@ function endGame(roomId) {
   room.phase = 'game-end';
   room.currentWord = null;
   room.strokes = [];
+  room.strokeActionStarts = [];
 
   io.to(roomId).emit('game:end', {
     finalScores: [...room.players]
@@ -370,10 +378,57 @@ io.on('connection', (socket) => {
     });
     room.currentDrawerIndex = -1;
     room.roundNumber = 0;
-    room.maxRounds = room.players.length * ROUNDS_PER_PLAYER;
+    room.maxRounds = room.players.length * room.roundsPerPlayer;
     room.usedWords.clear();
 
     startNextRound(roomId);
+  });
+
+  // Host-only, and only between games -- changing the word pool or timing
+  // mid-round would be confusing (and race the round timer/hint schedule
+  // that's already running).
+  socket.on('room:setWordList', ({ words } = {}) => {
+    const roomId = socket.data.roomId;
+    const room = getRoom(roomId);
+    if (!room || room.hostId !== socket.id) return;
+    if (room.phase !== 'lobby' && room.phase !== 'game-end') return;
+
+    const trimmed = String(words ?? '').trim();
+    if (!trimmed) {
+      // Empty submission clears back to the default word list.
+      room.customWords = [];
+      room.usedWords.clear();
+      broadcastRoomState(roomId);
+      return;
+    }
+
+    const parsed = parseCustomWordList(trimmed);
+    if (parsed.length < MIN_CUSTOM_WORDS) {
+      socket.emit('room:error', { message: `Need at least ${MIN_CUSTOM_WORDS} valid custom words.` });
+      return;
+    }
+
+    room.customWords = parsed;
+    room.usedWords.clear();
+    broadcastRoomState(roomId);
+  });
+
+  socket.on('room:setSettings', ({ roundLengthMs, roundsPerPlayer } = {}) => {
+    const roomId = socket.data.roomId;
+    const room = getRoom(roomId);
+    if (!room || room.hostId !== socket.id) return;
+    if (room.phase !== 'lobby' && room.phase !== 'game-end') return;
+
+    if (Number.isFinite(roundLengthMs)) {
+      room.roundLengthMs = Math.min(MAX_ROUND_LENGTH_MS, Math.max(MIN_ROUND_LENGTH_MS, Math.round(roundLengthMs)));
+    }
+    if (Number.isFinite(roundsPerPlayer)) {
+      room.roundsPerPlayer = Math.min(
+        MAX_ROUNDS_PER_PLAYER,
+        Math.max(MIN_ROUNDS_PER_PLAYER, Math.round(roundsPerPlayer))
+      );
+    }
+    broadcastRoomState(roomId);
   });
 
   socket.on('word:pick', ({ word } = {}) => {
@@ -406,9 +461,31 @@ io.on('connection', (socket) => {
       color: data.color,
       width: data.width,
     };
+    // A 'start' or 'fill' begins a new undo-able action -- remember where
+    // in the array it began so draw:undo can cut back to just before it.
+    if (stroke.type === 'start' || stroke.type === 'fill') {
+      room.strokeActionStarts.push(room.strokes.length);
+    }
     room.strokes.push(stroke);
 
     socket.to(roomId).emit('draw:stroke', stroke);
+  });
+
+  socket.on('draw:undo', () => {
+    const roomId = socket.data.roomId;
+    const room = getRoom(roomId);
+    if (!room || room.phase !== 'drawing') return;
+
+    const drawer = getDrawer(room);
+    if (!drawer || drawer.socketId !== socket.id) return;
+    if (room.strokeActionStarts.length === 0) return; // nothing left to undo
+
+    const cutIndex = room.strokeActionStarts.pop();
+    room.strokes = room.strokes.slice(0, cutIndex);
+
+    // No incremental "erase" on a raster canvas -- every client just wipes
+    // and replays the (now shorter) history, same as a late joiner would.
+    io.to(roomId).emit('draw:undo', { strokes: room.strokes });
   });
 
   socket.on('draw:clear', () => {
@@ -420,6 +497,7 @@ io.on('connection', (socket) => {
     if (!drawer || drawer.socketId !== socket.id) return;
 
     room.strokes = [];
+    room.strokeActionStarts = [];
     socket.to(roomId).emit('draw:clear');
   });
 
@@ -442,7 +520,7 @@ io.on('connection', (socket) => {
 
     if (isCorrect) {
       const elapsedMs = Date.now() - room.roundStartedAt;
-      const points = calcPoints(elapsedMs, ROUND_LENGTH_MS);
+      const points = calcPoints(elapsedMs, room.roundLengthMs);
       player.score += points;
       player.hasGuessedCorrectly = true;
       drawer.score += DRAWER_POINTS_PER_GUESSER;
@@ -531,6 +609,7 @@ function finalizePlayerRemoval(roomId, clientId) {
     const revealedWord = room.currentWord;
     room.currentWord = null;
     room.strokes = [];
+    room.strokeActionStarts = [];
     io.to(roomId).emit('round:end', {
       word: revealedWord,
       reason: 'drawer-left',
