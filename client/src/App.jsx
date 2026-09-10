@@ -399,7 +399,13 @@ export default function App() {
             )}
 
             {phase === 'drawing' && (
-              <motion.div key="drawing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.div
+                key="drawing"
+                className="drawing-stage"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
                 <Canvas socket={socket} isDrawer={isDrawer} initialStrokes={strokeHistory} drawingLabel="Watch the artist!" />
               </motion.div>
             )}

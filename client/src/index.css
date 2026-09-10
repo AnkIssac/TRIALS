@@ -23,6 +23,10 @@
 
 html, body, #root {
   height: 100%;
+  /* dvh tracks the real visible viewport on mobile browsers (shrinks for
+     an on-screen keyboard, address bar, etc.); vh above is the fallback
+     for browsers that don't support it. */
+  height: 100dvh;
 }
 
 body {
@@ -30,6 +34,10 @@ body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: linear-gradient(160deg, var(--bg) 0%, var(--bg-alt) 100%);
   color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* kills the double-tap-to-zoom delay on buttons/taps */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 button {
@@ -45,6 +53,7 @@ button {
   color: var(--ink);
   box-shadow: var(--shadow-sm);
   transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 button:hover:not(:disabled) {
   transform: translateY(-2px);
@@ -209,9 +218,14 @@ input:focus {
 }
 .join-row input {
   flex: 1;
+  min-width: 0; /* otherwise a flex item won't shrink below its content width, and on a
+                   narrow phone this pushes the Join button off the edge of the screen */
   text-transform: uppercase;
   letter-spacing: 2px;
   text-align: center;
+}
+.join-row button {
+  flex-shrink: 0;
 }
 .room-code-display {
   font-size: 2.6rem;
@@ -264,6 +278,7 @@ input:focus {
 }
 .settings-field select {
   font-family: inherit;
+  font-size: 16px; /* below 16px, iOS Safari zooms the page in on focus */
   font-weight: 700;
   color: var(--ink);
   padding: 8px 10px;
@@ -277,7 +292,7 @@ input:focus {
 .word-list-textarea {
   width: 100%;
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 16px; /* below 16px, iOS Safari zooms the page in on focus */
   padding: 10px 12px;
   border-radius: 12px;
   border: 2px solid var(--border);
@@ -457,6 +472,13 @@ input:focus {
   display: flex;
   flex-direction: column;
 }
+.drawing-stage {
+  flex: 1;
+  min-height: 0; /* lets it shrink below the canvas's natural aspect-ratio
+    height instead of overflowing .main-stage and pushing the toolbar out
+    of view when there isn't enough vertical room (short window, or a
+    stacked mobile layout) */
+}
 .stage-center {
   flex: 1;
   min-height: 0;
@@ -529,6 +551,7 @@ input:focus {
 }
 .toolbar-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
@@ -728,27 +751,205 @@ input:focus {
 }
 .chat-form input {
   flex: 1;
+  min-width: 0; /* same reason as .join-row input -- let it actually shrink on a narrow screen */
 }
 
 /* ---------- Responsive ---------- */
+
+/* Bigger tap targets wherever the input is a finger, not a cursor --
+   regardless of screen width, so a touch laptop/tablet in a wide window
+   still gets them. 44px is the usual minimum comfortable touch target. */
+@media (pointer: coarse) {
+  .swatch {
+    width: 38px;
+    height: 38px;
+  }
+  .width-btn {
+    width: 42px;
+    height: 42px;
+  }
+  .reaction-btn {
+    padding: 9px 11px;
+    font-size: 1.3rem;
+  }
+  .toolbar-group {
+    gap: 10px;
+  }
+  .mute-toggle {
+    padding: 9px 12px;
+  }
+  .avatar-swatch {
+    width: 26px;
+    height: 26px;
+  }
+  .avatar-widths .width-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .join-game-btn {
+    padding: 9px 12px;
+  }
+}
+
 @media (max-width: 900px) {
   .game-body {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr) auto;
   }
+  /* Explicit grid-row placement, not `order` -- `order` also changes
+     which row an auto-placed grid item lands in (not just paint order),
+     which put the sidebar in the flexible middle row and the canvas in
+     the auto-sized one: backwards, and it could collapse the canvas to
+     ~0 height during a phase transition when .main-stage is briefly
+     empty between AnimatePresence children. */
   .sidebar {
-    order: 1;
-    max-height: 120px;
+    grid-row: 1;
+    max-height: 140px;
   }
   .main-stage {
-    order: 0;
+    grid-row: 2;
   }
   .chat-sidebar {
-    order: 2;
-    max-height: 200px;
+    grid-row: 3;
+    max-height: 260px;
   }
   .word-hint {
     margin-left: 0;
+  }
+  .mute-toggle {
+    margin-left: 0 !important;
+  }
+  .game-header {
+    justify-content: space-between;
+    padding: 10px 14px;
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+  .game-body {
+    padding: 12px 14px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+}
+
+/* A rotated phone: plenty of width, very little height. Stacking three
+   sections (sidebar / canvas / chat) the way the ≤900px rule above does
+   needs more vertical room than a short landscape viewport has, and they
+   end up overlapping. Go back to a side-by-side layout instead -- narrower
+   fixed columns than the desktop version, so the canvas still gets a
+   usable share of the limited width. Comes after the ≤900px block on
+   purpose so it wins where both apply (a landscape phone is narrow AND
+   short at once). */
+@media (max-height: 500px) and (orientation: landscape) {
+  .game-body {
+    grid-template-columns: 150px minmax(0, 1fr) 200px;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .sidebar {
+    grid-row: auto;
+    grid-column: 1;
+    max-height: none;
+  }
+  .main-stage {
+    grid-row: auto;
+    grid-column: 2;
+  }
+  .chat-sidebar {
+    grid-row: auto;
+    grid-column: 3;
+    max-height: none;
+  }
+  .game-header {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .word-hint {
+    font-size: 1.1rem;
+  }
+  /* Vertical space is the scarce resource here, not tap-target size --
+     shrink the toolbar's controls (undoing the (pointer: coarse) bump)
+     and drop the group labels so the whole toolbar fits in a couple of
+     rows instead of starving the canvas of any visible height. */
+  .toolbar {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  .toolbar-group {
+    gap: 4px;
+  }
+  .toolbar-label {
+    display: none;
+  }
+  .swatch {
+    width: 22px;
+    height: 22px;
+  }
+  .current-preview {
+    width: 18px;
+    height: 18px;
+  }
+  .width-btn {
+    width: 26px;
+    height: 26px;
+  }
+  .tool-btn {
+    padding: 5px 9px;
+    font-size: 0.78rem;
+  }
+  /* Belt-and-suspenders: on the very smallest landscape phones even the
+     shrunk toolbar might not leave much room for the canvas -- let the
+     panel scroll internally rather than silently clipping the canvas. */
+  .canvas-panel {
+    gap: 6px;
+    overflow-y: auto;
+  }
+  .canvas-wrap {
+    min-height: 70px;
+  }
+}
+
+/* Phone-width tightening on top of the tablet-width stacked layout above. */
+@media (max-width: 480px) {
+  .room-pill, .round-pill {
+    font-size: 0.75rem;
+    padding: 6px 10px;
+  }
+  .team-score-chip {
+    font-size: 0.75rem;
+    padding: 5px 9px;
+  }
+  .word-hint {
+    font-size: 1.15rem;
+  }
+  .letter-blank {
+    width: 14px;
+  }
+  .timer {
+    font-size: 1.15rem;
+    padding: 4px 12px;
+  }
+  .toolbar {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .toolbar-group {
+    gap: 6px;
+  }
+  .lobby-card {
+    padding: 24px 18px;
+  }
+  .avatar-picker-body {
+    flex-wrap: wrap;
+  }
+  .room-code-display {
+    font-size: 2rem;
+    letter-spacing: 4px;
+  }
+  .reaction-bar {
+    justify-content: space-between;
+  }
+  .chat-form {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 }
 
