@@ -19,6 +19,10 @@ import {
   disconnectPlayer,
   reconnectPlayer,
   findByClientId,
+  addSpectator,
+  findSpectatorByClientId,
+  reconnectSpectator,
+  removeSpectatorBySocketId,
   getPlayer,
   getDrawer,
   publicRoomState,
@@ -43,6 +47,9 @@ const MIN_ROUND_LENGTH_MS = 30_000;
 const MAX_ROUND_LENGTH_MS = 120_000;
 const MIN_ROUNDS_PER_PLAYER = 1;
 const MAX_ROUNDS_PER_PLAYER = 5;
+
+const ALLOWED_REACTIONS = ['🔥', '😂', '👀', '😮', '❤️', '👏'];
+const REACTION_COOLDOWN_MS = 500;
 
 const app = express();
 app.use(cors({ origin: ALLOWED_ORIGINS }));
@@ -243,7 +250,7 @@ function endRound(roomId, reason) {
   io.to(roomId).emit('round:end', {
     word: revealedWord,
     reason,
-    scores: room.players.map((p) => ({ socketId: p.socketId, username: p.username, score: p.score })),
+    scores: room.players.map((p) => ({ socketId: p.socketId, username: p.username, score: p.score, team: p.team })),
   });
   broadcastRoomState(roomId);
 
@@ -272,7 +279,7 @@ function endGame(roomId) {
   io.to(roomId).emit('game:end', {
     finalScores: [...room.players]
       .sort((a, b) => b.score - a.score)
-      .map((p) => ({ socketId: p.socketId, username: p.username, score: p.score, color: p.color })),
+      .map((p) => ({ socketId: p.socketId, username: p.username, score: p.score, color: p.color, team: p.team })),
   });
   broadcastRoomState(roomId);
 }
@@ -315,50 +322,103 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const existing = findByClientId(room, clientId);
-    let player;
+    const existingPlayer = findByClientId(room, clientId);
+    const existingSpectator = !existingPlayer ? findSpectatorByClientId(room, clientId) : null;
+
+    let player = null;
+    let spectator = null;
     let isReconnect = false;
 
-    if (existing) {
+    if (existingPlayer) {
       // Same clientId means this is either a dropped player reclaiming their
       // slot within the grace window, or a page refresh / duplicate tab --
       // either way, reuse their existing score/state instead of adding a
       // second entry for them.
-      const pendingRemoval = room.pendingRemovals.get(existing.clientId);
+      const pendingRemoval = room.pendingRemovals.get(existingPlayer.clientId);
       if (pendingRemoval) {
         clearTimeout(pendingRemoval);
-        room.pendingRemovals.delete(existing.clientId);
+        room.pendingRemovals.delete(existingPlayer.clientId);
       }
-      isReconnect = !existing.connected || existing.socketId !== socket.id;
-      player = reconnectPlayer(room, existing, socket.id, sanitizeUsername(username));
+      isReconnect = !existingPlayer.connected || existingPlayer.socketId !== socket.id;
+      player = reconnectPlayer(room, existingPlayer, socket.id, sanitizeUsername(username));
+    } else if (existingSpectator) {
+      isReconnect = true;
+      spectator = reconnectSpectator(room, existingSpectator, socket.id, sanitizeUsername(username));
     } else {
       if (room.players.some((p) => p.socketId === socket.id)) return;
-      player = addPlayer(room, {
-        socketId: socket.id,
-        username: sanitizeUsername(username),
-        clientId,
-        avatar: sanitizeAvatar(avatar),
-      });
+
+      // A round is already underway: join as a spectator instead of
+      // dropping straight into turn rotation mid-game. Between games
+      // (lobby/game-end) a join is a normal full player, same as always.
+      const isMidGame = room.phase !== 'lobby' && room.phase !== 'game-end';
+      if (isMidGame) {
+        spectator = addSpectator(room, {
+          socketId: socket.id,
+          username: sanitizeUsername(username),
+          clientId,
+          avatar: sanitizeAvatar(avatar),
+        });
+      } else {
+        player = addPlayer(room, {
+          socketId: socket.id,
+          username: sanitizeUsername(username),
+          clientId,
+          avatar: sanitizeAvatar(avatar),
+        });
+      }
     }
+
+    const identity = player ?? spectator;
 
     socket.join(id);
     socket.data.roomId = id;
-    socket.data.username = player.username;
-    socket.data.clientId = player.clientId;
+    socket.data.username = identity.username;
+    socket.data.clientId = identity.clientId;
+    socket.data.isSpectator = !!spectator;
 
-    socket.emit(isReconnect ? 'room:rejoined' : 'room:joined', { roomId: id, socketId: socket.id });
+    socket.emit(isReconnect ? 'room:rejoined' : 'room:joined', { roomId: id, socketId: socket.id, spectator: !!spectator });
 
-    // Catches up a late joiner OR a reconnecting player: word choices if
-    // they're the drawer picking, or round state + stroke history if a
-    // round is already in progress.
+    // Catches up a late joiner OR a reconnecting player/spectator: word
+    // choices if they're the drawer picking (never true for a spectator's
+    // socket), or round state + stroke history if a round is in progress.
     sendRoundCatchUp(socket, room);
 
     io.to(id).emit('chat:message', {
       username: 'System',
-      text: isReconnect ? `${player.username} reconnected.` : `${player.username} joined the room.`,
+      text: isReconnect
+        ? `${identity.username} reconnected.`
+        : spectator
+          ? `${identity.username} is watching.`
+          : `${identity.username} joined the room.`,
       system: true,
     });
     broadcastRoomState(id);
+  });
+
+  // A spectator opts in to actually playing -- takes effect immediately and
+  // they're folded into turn rotation the next time it comes around.
+  socket.on('spectator:join', () => {
+    const roomId = socket.data.roomId;
+    const room = getRoom(roomId);
+    if (!room || !socket.data.isSpectator) return;
+
+    const spectator = room.spectators.find((s) => s.socketId === socket.id);
+    if (!spectator || !removeSpectatorBySocketId(room, socket.id)) return;
+
+    const player = addPlayer(room, {
+      socketId: socket.id,
+      username: spectator.username,
+      clientId: spectator.clientId,
+      avatar: spectator.avatar,
+    });
+    socket.data.isSpectator = false;
+
+    io.to(roomId).emit('chat:message', {
+      username: 'System',
+      text: `${player.username} joined as a player.`,
+      system: true,
+    });
+    broadcastRoomState(roomId);
   });
 
   socket.on('game:start', () => {
@@ -372,9 +432,10 @@ io.on('connection', (socket) => {
       return;
     }
 
-    room.players.forEach((p) => {
+    room.players.forEach((p, i) => {
       p.score = 0;
       p.hasGuessedCorrectly = false;
+      p.team = room.teamsEnabled ? (i % 2 === 0 ? 'red' : 'blue') : null;
     });
     room.currentDrawerIndex = -1;
     room.roundNumber = 0;
@@ -382,6 +443,20 @@ io.on('connection', (socket) => {
     room.usedWords.clear();
 
     startNextRound(roomId);
+  });
+
+  // Host-only, only between games. Deliberately scoped: teams only pool
+  // score, turn rotation and everything else about a round stays exactly
+  // the same as solo play -- no team-vs-team drawer assignment, no shared
+  // guesses. A bigger team mode is a much larger redesign than this.
+  socket.on('room:setTeams', ({ enabled } = {}) => {
+    const roomId = socket.data.roomId;
+    const room = getRoom(roomId);
+    if (!room || room.hostId !== socket.id) return;
+    if (room.phase !== 'lobby' && room.phase !== 'game-end') return;
+
+    room.teamsEnabled = !!enabled;
+    broadcastRoomState(roomId);
   });
 
   // Host-only, and only between games -- changing the word pool or timing
@@ -552,11 +627,36 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Fire-and-forget: no room-state history, no late-joiner replay -- these
+  // are meant to feel like a live audience reaction, not a persisted event.
+  socket.on('reaction:send', ({ emoji } = {}) => {
+    const roomId = socket.data.roomId;
+    const room = getRoom(roomId);
+    if (!room || room.phase !== 'drawing') return;
+    if (!ALLOWED_REACTIONS.includes(emoji)) return;
+
+    const now = Date.now();
+    if (socket.data.lastReactionAt && now - socket.data.lastReactionAt < REACTION_COOLDOWN_MS) return;
+    socket.data.lastReactionAt = now;
+
+    io.to(roomId).emit('reaction:broadcast', { emoji });
+  });
+
   socket.on('disconnect', () => {
     const roomId = socket.data.roomId;
     if (!roomId) return;
     const room = getRoom(roomId);
     if (!room) return;
+
+    if (socket.data.isSpectator) {
+      // No score, no rotation slot, nothing worth holding open -- just
+      // remove them (guarded so a reconnect that already updated their
+      // socketId isn't clobbered by this older socket's disconnect).
+      if (removeSpectatorBySocketId(room, socket.id)) {
+        broadcastRoomState(roomId);
+      }
+      return;
+    }
 
     const player = disconnectPlayer(room, socket.id);
     if (!player) return;
@@ -613,7 +713,7 @@ function finalizePlayerRemoval(roomId, clientId) {
     io.to(roomId).emit('round:end', {
       word: revealedWord,
       reason: 'drawer-left',
-      scores: room.players.map((p) => ({ socketId: p.socketId, username: p.username, score: p.score })),
+      scores: room.players.map((p) => ({ socketId: p.socketId, username: p.username, score: p.score, team: p.team })),
     });
     broadcastRoomState(roomId);
 

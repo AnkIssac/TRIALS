@@ -28,11 +28,13 @@ export default function Lobby({
   roundLengthMs,
   roundsPerPlayer,
   customWordCount,
+  teamsEnabled,
   onCreate,
   onJoin,
   onStart,
   onSetSettings,
   onSetWordList,
+  onSetTeams,
 }) {
   const [username, setUsername] = useState(() => localStorage.getItem('doodle-duel-username') || '');
   const [joinCode, setJoinCode] = useState('');
@@ -111,7 +113,7 @@ export default function Lobby({
       <div className="room-code-display">{roomId}</div>
       <p className="hint">Share this code with friends so they can join.</p>
 
-      <PlayerList players={players} hostId={hostId} drawerId={null} mySocketId={mySocketId} />
+      <PlayerList players={players} hostId={hostId} drawerId={null} mySocketId={mySocketId} teamsEnabled={teamsEnabled} />
 
       <div className="game-settings">
         <span className="field-label">Game Settings</span>
@@ -149,6 +151,14 @@ export default function Lobby({
             {Math.round(roundLengthMs / 1000)}s rounds &middot; {roundsPerPlayer} round{roundsPerPlayer === 1 ? '' : 's'}{' '}
             per player
           </p>
+        )}
+        {isHost ? (
+          <label className="team-toggle">
+            <input type="checkbox" checked={!!teamsEnabled} onChange={(e) => onSetTeams(e.target.checked)} />
+            <span>🔴🔵 Team Mode (scores pool by team; turns still go player-by-player)</span>
+          </label>
+        ) : (
+          teamsEnabled && <p className="hint">Team Mode is on -- teams are assigned when the game starts.</p>
         )}
       </div>
 

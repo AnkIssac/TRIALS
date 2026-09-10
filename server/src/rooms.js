@@ -14,6 +14,7 @@ export const AVATAR_COLORS = [
   '#f94144', '#f3722c', '#f8961e', '#f9c74f', '#90be6d',
   '#43aa8b', '#4d908e', '#577590', '#277da1', '#9b5de5',
 ];
+export const TEAM_COLORS = { red: '#e03131', blue: '#1971c2' };
 
 const rooms = new Map();
 
@@ -37,7 +38,8 @@ export function generateRoomId() {
 export function createRoom(roomId) {
   const room = {
     id: roomId,
-    players: [], // { socketId, clientId, username, score, color, hasGuessedCorrectly, connected }
+    players: [], // { socketId, clientId, username, score, color, team, hasGuessedCorrectly, connected }
+    spectators: [], // { socketId, clientId, username, avatar } -- never scored, never drawn into rotation
     hostId: null,
     currentDrawerIndex: -1,
     usedWords: new Set(),
@@ -57,6 +59,7 @@ export function createRoom(roomId) {
     customWords: [], // host-supplied word list; falls back to the default WORD_LIST when empty
     roundLengthMs: ROUND_LENGTH_MS, // per-room, host-configurable copy of the default
     roundsPerPlayer: ROUNDS_PER_PLAYER, // per-room, host-configurable copy of the default
+    teamsEnabled: false, // co-op scoring only -- turn rotation is unaffected either way
   };
   rooms.set(roomId, room);
   return room;
@@ -77,7 +80,7 @@ export function deleteRoom(roomId) {
   rooms.delete(roomId);
 }
 
-export function addPlayer(room, { socketId, username, clientId, avatar }) {
+export function addPlayer(room, { socketId, username, clientId, avatar, team }) {
   const color = AVATAR_COLORS[room.players.length % AVATAR_COLORS.length];
   const player = {
     socketId,
@@ -86,12 +89,43 @@ export function addPlayer(room, { socketId, username, clientId, avatar }) {
     score: 0,
     color,
     avatar: avatar || null, // player-drawn PNG data URL, or null for the default colored-initial avatar
+    team: team ?? null, // 'red' | 'blue' | null -- only meaningful while room.teamsEnabled
     hasGuessedCorrectly: false,
     connected: true,
   };
   room.players.push(player);
   if (!room.hostId) room.hostId = socketId;
   return player;
+}
+
+/** Spectators are a separate, much simpler list: no score, no reconnect
+ * grace period (nothing at stake if they drop), never enter rotation. */
+export function addSpectator(room, { socketId, username, clientId, avatar }) {
+  const spectator = { socketId, clientId: clientId || socketId, username, avatar: avatar || null };
+  room.spectators.push(spectator);
+  return spectator;
+}
+
+export function findSpectatorByClientId(room, clientId) {
+  if (!clientId) return null;
+  return room.spectators.find((s) => s.clientId === clientId) ?? null;
+}
+
+/** Reclaims a spectator's slot for a new socket (refresh / duplicate tab). */
+export function reconnectSpectator(room, spectator, newSocketId, newUsername) {
+  spectator.socketId = newSocketId;
+  if (newUsername) spectator.username = newUsername;
+  return spectator;
+}
+
+/** Only removes if the socketId still matches -- guards against removing a
+ * spectator who already reconnected under a newer socket before this
+ * disconnect for the old one was processed. */
+export function removeSpectatorBySocketId(room, socketId) {
+  const idx = room.spectators.findIndex((s) => s.socketId === socketId);
+  if (idx === -1) return false;
+  room.spectators.splice(idx, 1);
+  return true;
 }
 
 /**
@@ -164,8 +198,15 @@ export function publicRoomState(room) {
       score: p.score,
       color: p.color,
       avatar: p.avatar,
+      team: p.team,
       connected: p.connected,
       hasGuessedCorrectly: p.hasGuessedCorrectly,
+    })),
+    spectators: room.spectators.map((s) => ({
+      socketId: s.socketId,
+      clientId: s.clientId,
+      username: s.username,
+      avatar: s.avatar,
     })),
     hostId: room.hostId,
     phase: room.phase,
@@ -175,6 +216,13 @@ export function publicRoomState(room) {
     customWordCount: room.customWords.length,
     roundLengthMs: room.roundLengthMs,
     roundsPerPlayer: room.roundsPerPlayer,
+    teamsEnabled: room.teamsEnabled,
+    teamScores: room.teamsEnabled
+      ? {
+          red: room.players.filter((p) => p.team === 'red').reduce((sum, p) => sum + p.score, 0),
+          blue: room.players.filter((p) => p.team === 'blue').reduce((sum, p) => sum + p.score, 0),
+        }
+      : null,
   };
 }
 

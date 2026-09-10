@@ -778,3 +778,122 @@ input:focus {
 .mute-toggle:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.32);
 }
+
+/* ---------- Reactions ---------- */
+.reaction-bar {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid var(--border);
+}
+.reaction-btn {
+  padding: 6px 8px;
+  font-size: 1.1rem;
+  line-height: 1;
+  box-shadow: none;
+  border-radius: 10px;
+}
+.reaction-btn:hover:not(:disabled) {
+  background: #f1e8ff;
+  border-color: var(--primary);
+}
+.reactions-layer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 40;
+}
+.reaction-emoji {
+  position: absolute;
+  bottom: 10%;
+  font-size: 2rem;
+}
+
+/* ---------- Teams ---------- */
+.team-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+}
+.team-toggle input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+.player-row.team-red {
+  border-left: 5px solid var(--danger);
+}
+.player-row.team-blue {
+  border-left: 5px solid #1971c2;
+}
+.final-scores li.team-red {
+  border-left: 5px solid var(--danger);
+}
+.final-scores li.team-blue {
+  border-left: 5px solid #1971c2;
+}
+.team-scores-header {
+  display: flex;
+  gap: 8px;
+}
+.team-score-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.22);
+  color: white;
+}
+.team-scores-banner {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 4px 0 16px;
+}
+.team-scores-banner .team-score-chip {
+  background: #f6f3fa;
+  color: var(--ink);
+  border: 2px solid var(--border);
+}
+
+/* ---------- Spectators ---------- */
+.spectator-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 2px solid var(--border);
+}
+.spectator-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.spectator-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: #faf7fd;
+}
+.spectator-avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+.join-game-btn {
+  margin-left: auto;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  box-shadow: none;
+}

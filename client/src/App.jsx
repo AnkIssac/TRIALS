@@ -8,6 +8,8 @@ import Chat from './components/Chat.jsx';
 import PlayerList from './components/PlayerList.jsx';
 import Timer from './components/Timer.jsx';
 import Confetti from './components/Confetti.jsx';
+import Reactions from './components/Reactions.jsx';
+import ReactionBar from './components/ReactionBar.jsx';
 import * as sound from './utils/sound.js';
 
 let msgIdCounter = 0;
@@ -231,6 +233,8 @@ export default function App() {
   const handlePickWord = (word) => socket.emit('word:pick', { word });
   const handleSetSettings = (settings) => socket.emit('room:setSettings', settings);
   const handleSetWordList = (words) => socket.emit('room:setWordList', { words });
+  const handleSetTeams = (enabled) => socket.emit('room:setTeams', { enabled });
+  const handleJoinGame = () => socket.emit('spectator:join');
 
   if (!connected) {
     return (
@@ -244,6 +248,7 @@ export default function App() {
   const phase = roomState?.phase;
   const isDrawer = roomState?.drawerId === mySocketId;
   const me = roomState?.players.find((p) => p.socketId === mySocketId);
+  const isSpectator = !!roomState?.spectators?.some((s) => s.socketId === mySocketId);
 
   if (!inRoom || phase === 'lobby') {
     return (
@@ -258,11 +263,13 @@ export default function App() {
           roundLengthMs={roomState?.roundLengthMs ?? 80_000}
           roundsPerPlayer={roomState?.roundsPerPlayer ?? 2}
           customWordCount={roomState?.customWordCount ?? 0}
+          teamsEnabled={roomState?.teamsEnabled ?? false}
           onCreate={handleCreate}
           onJoin={handleJoin}
           onStart={handleStart}
           onSetSettings={handleSetSettings}
           onSetWordList={handleSetWordList}
+          onSetTeams={handleSetTeams}
         />
       </div>
     );
@@ -275,6 +282,12 @@ export default function App() {
         <Confetti burstKey={confetti.key} big={confetti.big} />
         <motion.div className="lobby-card game-end-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1>🏆 Final Scores</h1>
+          {roomState.teamsEnabled && roomState.teamScores && (
+            <div className="team-scores-banner">
+              <span className="team-score-chip team-red">🔴 Red: {roomState.teamScores.red}</span>
+              <span className="team-score-chip team-blue">🔵 Blue: {roomState.teamScores.blue}</span>
+            </div>
+          )}
           <ol className="final-scores">
             {finalScores.map((p, i) => (
               <motion.li
@@ -282,6 +295,7 @@ export default function App() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.15 }}
+                className={roomState.teamsEnabled && p.team ? `team-${p.team}` : ''}
               >
                 <span className="rank">#{i + 1}</span>
                 <span className="player-avatar" style={{ background: p.color }}>
@@ -292,7 +306,11 @@ export default function App() {
               </motion.li>
             ))}
           </ol>
-          {isHost ? (
+          {isSpectator ? (
+            <button className="primary" onClick={handleJoinGame}>
+              Join Next Game
+            </button>
+          ) : isHost ? (
             <button className="primary" onClick={handleStart}>
               Play Again
             </button>
@@ -308,11 +326,18 @@ export default function App() {
   return (
     <div className="app-shell game-layout">
       <Confetti burstKey={confetti.key} big={confetti.big} />
+      <Reactions socket={socket} />
       <header className="game-header">
         <div className="room-pill">Room {roomState.roomId}</div>
         <div className="round-pill">
           Round {roomState.roundNumber}/{roomState.maxRounds}
         </div>
+        {roomState.teamsEnabled && roomState.teamScores && (
+          <div className="team-scores-header">
+            <span className="team-score-chip team-red">🔴 {roomState.teamScores.red}</span>
+            <span className="team-score-chip team-blue">🔵 {roomState.teamScores.blue}</span>
+          </div>
+        )}
         {phase === 'drawing' && <Timer timeLimitMs={timeLimit} roundKey={roundKey} onTick={sound.playTick} />}
         {phase === 'drawing' && (
           <div className="word-hint">
@@ -350,6 +375,9 @@ export default function App() {
             hostId={roomState.hostId}
             drawerId={roomState.drawerId}
             mySocketId={mySocketId}
+            teamsEnabled={roomState.teamsEnabled}
+            spectators={roomState.spectators}
+            onJoinGame={handleJoinGame}
           />
         </aside>
 
@@ -396,11 +424,20 @@ export default function App() {
         </main>
 
         <aside className="chat-sidebar">
+          <ReactionBar socket={socket} disabled={phase !== 'drawing'} />
           <Chat
             socket={socket}
             messages={messages}
-            disabled={phase !== 'drawing' || isDrawer || !!me?.hasGuessedCorrectly}
-            disabledReason={isDrawer ? "You're drawing!" : me?.hasGuessedCorrectly ? 'You already guessed it!' : undefined}
+            disabled={phase !== 'drawing' || isDrawer || isSpectator || !!me?.hasGuessedCorrectly}
+            disabledReason={
+              isSpectator
+                ? "You're watching!"
+                : isDrawer
+                  ? "You're drawing!"
+                  : me?.hasGuessedCorrectly
+                    ? 'You already guessed it!'
+                    : undefined
+            }
           />
         </aside>
       </div>
