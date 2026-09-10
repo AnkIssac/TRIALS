@@ -201,6 +201,15 @@ input:focus {
   min-width: 2.5em;
   text-align: right;
 }
+.player-row.is-disconnected {
+  opacity: 0.5;
+}
+.reconnecting-tag {
+  font-weight: 400;
+  font-style: italic;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
 
 /* ---------- Game layout ---------- */
 .game-layout {
@@ -236,9 +245,14 @@ input:focus {
   text-transform: uppercase;
 }
 .letter-blank {
-  display: inline-block;
+  display: inline-flex;
+  justify-content: center;
   width: 16px;
   border-bottom: 3px solid var(--ink);
+}
+.letter-space {
+  display: inline-block;
+  width: 10px;
 }
 
 .timer {

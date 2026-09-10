@@ -8,13 +8,13 @@ export default function PlayerList({ players, hostId, drawerId, mySocketId }) {
       <AnimatePresence initial={false}>
         {sorted.map((p) => (
           <motion.li
-            key={p.socketId}
+            key={p.clientId ?? p.socketId}
             layout
             initial={{ opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 12 }}
             transition={{ duration: 0.25 }}
-            className={`player-row ${p.socketId === drawerId ? 'is-drawer' : ''}`}
+            className={`player-row ${p.socketId === drawerId ? 'is-drawer' : ''} ${!p.connected ? 'is-disconnected' : ''}`}
           >
             <span className="player-avatar" style={{ background: p.color }}>
               {p.username.slice(0, 1).toUpperCase()}
@@ -22,6 +22,7 @@ export default function PlayerList({ players, hostId, drawerId, mySocketId }) {
             <span className="player-name">
               {p.username}
               {p.socketId === mySocketId && ' (you)'}
+              {!p.connected && <span className="reconnecting-tag"> (reconnecting…)</span>}
             </span>
             <span className="player-badges">
               {p.socketId === hostId && <span title="Host">👑</span>}

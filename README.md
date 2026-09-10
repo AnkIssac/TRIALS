@@ -64,8 +64,16 @@ static client (Vercel/Netlify) once you're past casual testing, are in
 - **Scoring**: faster correct guesses earn more points (500 → 50 floor,
   linear falloff over the round); the drawer earns a flat bonus per
   correct guesser. A round ends early once everyone's guessed.
-- **Disconnects**: if the drawer leaves mid-round, the round ends
-  immediately and rotation continues with whoever's left.
+- **Hints**: the server reveals a letter or two (up to 2, only for words
+  long enough that it doesn't give the game away) at 40% and 70% through
+  the round, sent only to non-drawers.
+- **Reconnects**: a browser tab keeps a stable `clientId` in localStorage.
+  If your socket drops (refresh, phone lock, wifi blip), the server holds
+  your slot — score, host status, drawer turn — open for 25s. Reconnecting
+  within that window (even a full page reload) reclaims it silently; your
+  canvas, hint progress, and secret word (if you're drawing) are resent.
+  If you don't come back in time, you're removed and, if you were
+  drawing, the round ends and rotates to the next player.
 
 ## Build order this repo follows
 

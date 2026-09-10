@@ -11,6 +11,51 @@ import Timer from './components/Timer.jsx';
 let msgIdCounter = 0;
 const nextMsgId = () => `m${++msgIdCounter}-${Date.now()}`;
 
+const CLIENT_ID_KEY = 'doodle-duel-client-id';
+const SESSION_KEY = 'doodle-duel-session';
+
+// A stable per-browser id so a dropped connection (refresh, phone lock,
+// wifi blip) can reclaim the same player slot instead of joining as a new
+// player. Survives page reloads; a private window / cleared storage just
+// means that tab starts a fresh identity, which is fine.
+function getOrCreateClientId() {
+  try {
+    let id = localStorage.getItem(CLIENT_ID_KEY);
+    if (!id) {
+      id = crypto.randomUUID?.() ?? `c${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(CLIENT_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return `c${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+function saveSession(session) {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    /* ignore (private browsing, etc.) */
+  }
+}
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export default function App() {
   const { socket, connected } = useSocket();
 
@@ -28,16 +73,45 @@ export default function App() {
 
   const [roundEndInfo, setRoundEndInfo] = useState(null);
   const [finalScores, setFinalScores] = useState(null);
+  const [hintMask, setHintMask] = useState(null);
 
   const roomStateRef = useRef(roomState);
   roomStateRef.current = roomState;
 
-  useEffect(() => {
-    const onConnect = () => setMySocketId(socket.id);
+  const clientIdRef = useRef(getOrCreateClientId());
+  const pendingUsernameRef = useRef(''); // username of the create/join currently in flight
 
-    const onRoomCreated = () => setErrorMessage('');
-    const onRoomJoined = () => setErrorMessage('');
-    const onRoomError = ({ message }) => setErrorMessage(message);
+  useEffect(() => {
+    const onConnect = () => {
+      setMySocketId(socket.id);
+
+      // Reconnected (or just loaded the page) with a saved session and no
+      // room state yet -- try to reclaim our slot rather than sitting on
+      // the home screen. The server matches us by clientId, so this is a
+      // no-op if that room/player no longer exists.
+      const session = loadSession();
+      if (session && !roomStateRef.current) {
+        pendingUsernameRef.current = session.username;
+        socket.emit('room:join', { roomId: session.roomId, username: session.username, clientId: clientIdRef.current });
+      }
+    };
+
+    const onRoomCreated = ({ roomId }) => {
+      setErrorMessage('');
+      saveSession({ roomId, username: pendingUsernameRef.current });
+    };
+    const onRoomJoined = ({ roomId }) => {
+      setErrorMessage('');
+      saveSession({ roomId, username: pendingUsernameRef.current });
+    };
+    const onRoomRejoined = ({ roomId }) => {
+      setErrorMessage('');
+      saveSession({ roomId, username: pendingUsernameRef.current });
+    };
+    const onRoomError = ({ message }) => {
+      setErrorMessage(message);
+      clearSession();
+    };
 
     const onRoomState = (state) => {
       setRoomState(state);
@@ -45,22 +119,25 @@ export default function App() {
         setRoundEndInfo(null);
         setFinalScores(null);
         setMyWord(null);
+        setHintMask(null);
       }
     };
 
     const onWordChoices = ({ choices }) => setWordChoices(choices);
 
-    const onRoundStart = ({ wordLength: wl, timeLimit: tl }) => {
+    const onRoundStart = ({ wordLength: wl, timeLimit: tl, hint }) => {
       setWordChoices(null);
       setMyWord(null);
       setWordLength(wl);
       setTimeLimit(tl);
       setRoundEndInfo(null);
       setStrokeHistory(null);
+      setHintMask(hint ?? null);
       setRoundKey((k) => k + 1);
     };
 
     const onRoundWord = ({ word }) => setMyWord(word);
+    const onRoundHint = ({ hint }) => setHintMask(hint);
 
     const onDrawHistory = ({ strokes }) => setStrokeHistory(strokes);
 
@@ -82,11 +159,13 @@ export default function App() {
     socket.on('connect', onConnect);
     socket.on('room:created', onRoomCreated);
     socket.on('room:joined', onRoomJoined);
+    socket.on('room:rejoined', onRoomRejoined);
     socket.on('room:error', onRoomError);
     socket.on('room:state', onRoomState);
     socket.on('word:choices', onWordChoices);
     socket.on('round:start', onRoundStart);
     socket.on('round:word', onRoundWord);
+    socket.on('round:hint', onRoundHint);
     socket.on('draw:history', onDrawHistory);
     socket.on('chat:message', onChatMessage);
     socket.on('round:end', onRoundEnd);
@@ -96,11 +175,13 @@ export default function App() {
       socket.off('connect', onConnect);
       socket.off('room:created', onRoomCreated);
       socket.off('room:joined', onRoomJoined);
+      socket.off('room:rejoined', onRoomRejoined);
       socket.off('room:error', onRoomError);
       socket.off('room:state', onRoomState);
       socket.off('word:choices', onWordChoices);
       socket.off('round:start', onRoundStart);
       socket.off('round:word', onRoundWord);
+      socket.off('round:hint', onRoundHint);
       socket.off('draw:history', onDrawHistory);
       socket.off('chat:message', onChatMessage);
       socket.off('round:end', onRoundEnd);
@@ -110,12 +191,14 @@ export default function App() {
 
   const handleCreate = (username) => {
     setErrorMessage('');
-    socket.emit('room:create', { username });
+    pendingUsernameRef.current = username;
+    socket.emit('room:create', { username, clientId: clientIdRef.current });
   };
 
   const handleJoin = (username, roomId) => {
     setErrorMessage('');
-    socket.emit('room:join', { roomId, username });
+    pendingUsernameRef.current = username;
+    socket.emit('room:join', { roomId, username, clientId: clientIdRef.current });
   };
 
   const handleStart = () => socket.emit('game:start');
@@ -198,7 +281,19 @@ export default function App() {
         {phase === 'drawing' && <Timer timeLimitMs={timeLimit} roundKey={roundKey} />}
         {phase === 'drawing' && (
           <div className="word-hint">
-            {isDrawer ? myWord : Array.from({ length: wordLength }).map((_, i) => <span key={i} className="letter-blank" />)}
+            {isDrawer
+              ? myWord
+              : (hintMask ?? '_'.repeat(wordLength))
+                  .split('')
+                  .map((ch, i) =>
+                    ch === ' ' ? (
+                      <span key={i} className="letter-space" />
+                    ) : (
+                      <span key={i} className="letter-blank">
+                        {ch !== '_' ? ch : ''}
+                      </span>
+                    )
+                  )}
           </div>
         )}
       </header>
