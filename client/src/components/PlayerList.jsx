@@ -16,9 +16,21 @@ export default function PlayerList({ players, hostId, drawerId, mySocketId }) {
             transition={{ duration: 0.25 }}
             className={`player-row ${p.socketId === drawerId ? 'is-drawer' : ''} ${!p.connected ? 'is-disconnected' : ''}`}
           >
-            <span className="player-avatar" style={{ background: p.color }}>
-              {p.username.slice(0, 1).toUpperCase()}
-            </span>
+            {p.avatar ? (
+              <img
+                src={p.avatar}
+                alt=""
+                className="player-avatar player-avatar-img"
+                style={{ borderColor: p.color, boxShadow: `0 0 0 2px white, 0 0 0 4px ${p.color}` }}
+              />
+            ) : (
+              <span
+                className="player-avatar"
+                style={{ background: p.color, boxShadow: `0 0 0 2px white, 0 0 0 4px ${p.color}` }}
+              >
+                {p.username.slice(0, 1).toUpperCase()}
+              </span>
+            )}
             <span className="player-name">
               {p.username}
               {p.socketId === mySocketId && ' (you)'}

@@ -193,16 +193,16 @@ export default function App() {
     };
   }, [socket]);
 
-  const handleCreate = (username) => {
+  const handleCreate = (username, avatar) => {
     setErrorMessage('');
     pendingUsernameRef.current = username;
-    socket.emit('room:create', { username, clientId: clientIdRef.current });
+    socket.emit('room:create', { username, clientId: clientIdRef.current, avatar });
   };
 
-  const handleJoin = (username, roomId) => {
+  const handleJoin = (username, roomId, avatar) => {
     setErrorMessage('');
     pendingUsernameRef.current = username;
-    socket.emit('room:join', { roomId, username, clientId: clientIdRef.current });
+    socket.emit('room:join', { roomId, username, clientId: clientIdRef.current, avatar });
   };
 
   const handleStart = () => socket.emit('game:start');

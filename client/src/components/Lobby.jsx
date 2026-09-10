@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import PlayerList from './PlayerList.jsx';
+import AvatarPicker from './AvatarPicker.jsx';
 
 const MIN_PLAYERS_TO_START = 2;
 
@@ -21,6 +22,7 @@ export default function Lobby({
 }) {
   const [username, setUsername] = useState(() => localStorage.getItem('doodle-duel-username') || '');
   const [joinCode, setJoinCode] = useState('');
+  const avatarRef = useRef(null);
 
   const persistName = (name) => {
     try {
@@ -46,13 +48,15 @@ export default function Lobby({
           />
         </label>
 
+        <AvatarPicker ref={avatarRef} />
+
         <div className="lobby-actions">
           <button
             className="primary"
             disabled={!username.trim()}
             onClick={() => {
               persistName(username.trim());
-              onCreate(username.trim());
+              onCreate(username.trim(), avatarRef.current?.getDataUrl() ?? null);
             }}
           >
             Create a Room
@@ -70,7 +74,7 @@ export default function Lobby({
               disabled={!username.trim() || !joinCode.trim()}
               onClick={() => {
                 persistName(username.trim());
-                onJoin(username.trim(), joinCode.trim());
+                onJoin(username.trim(), joinCode.trim(), avatarRef.current?.getDataUrl() ?? null);
               }}
             >
               Join

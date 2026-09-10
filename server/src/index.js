@@ -59,6 +59,18 @@ function sanitizeUsername(raw) {
   return trimmed || 'Player';
 }
 
+// A player-drawn avatar is a one-time PNG data URL, not a live stream, so
+// unlike the drawing canvas there's no reason to avoid sending it whole --
+// it's just capped to a sane size and shape so a bad client can't shove an
+// arbitrary blob into room state.
+const MAX_AVATAR_LENGTH = 60_000;
+function sanitizeAvatar(raw) {
+  if (typeof raw !== 'string') return null;
+  if (!raw.startsWith('data:image/png;base64,')) return null;
+  if (raw.length > MAX_AVATAR_LENGTH) return null;
+  return raw;
+}
+
 function broadcastRoomState(roomId) {
   const room = getRoom(roomId);
   if (!room) return;
@@ -267,13 +279,14 @@ function checkAllGuessed(roomId) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('room:create', ({ username, clientId } = {}) => {
+  socket.on('room:create', ({ username, clientId, avatar } = {}) => {
     const roomId = generateRoomId();
     const room = createRoom(roomId);
     const player = addPlayer(room, {
       socketId: socket.id,
       username: sanitizeUsername(username),
       clientId,
+      avatar: sanitizeAvatar(avatar),
     });
 
     socket.join(roomId);
@@ -285,7 +298,7 @@ io.on('connection', (socket) => {
     broadcastRoomState(roomId);
   });
 
-  socket.on('room:join', ({ roomId, username, clientId } = {}) => {
+  socket.on('room:join', ({ roomId, username, clientId, avatar } = {}) => {
     const id = String(roomId ?? '').trim().toUpperCase();
     const room = getRoom(id);
 
@@ -312,7 +325,12 @@ io.on('connection', (socket) => {
       player = reconnectPlayer(room, existing, socket.id, sanitizeUsername(username));
     } else {
       if (room.players.some((p) => p.socketId === socket.id)) return;
-      player = addPlayer(room, { socketId: socket.id, username: sanitizeUsername(username), clientId });
+      player = addPlayer(room, {
+        socketId: socket.id,
+        username: sanitizeUsername(username),
+        clientId,
+        avatar: sanitizeAvatar(avatar),
+      });
     }
 
     socket.join(id);

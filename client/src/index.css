@@ -131,6 +131,73 @@ input:focus {
   font-weight: 700;
   font-size: 0.9rem;
 }
+.field-label {
+  display: block;
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+/* ---------- Avatar picker (lobby) ---------- */
+.avatar-picker {
+  margin-bottom: 18px;
+}
+.avatar-picker-body {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: #faf7fd;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+}
+.avatar-canvas {
+  width: 84px;
+  height: 84px;
+  flex-shrink: 0;
+  background: white;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  touch-action: none;
+  cursor: crosshair;
+}
+.avatar-picker-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+.avatar-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.avatar-swatch {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(0, 0, 0, 0.08);
+  box-shadow: none;
+}
+.avatar-swatch.active {
+  box-shadow: 0 0 0 2px white, 0 0 0 4px var(--primary);
+}
+.avatar-widths {
+  display: flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+.avatar-widths .width-btn {
+  width: 26px;
+  height: 26px;
+}
+.avatar-clear-btn {
+  padding: 6px 10px;
+  margin-left: auto;
+  box-shadow: none;
+}
 .lobby-actions {
   display: flex;
   flex-direction: column;
@@ -184,12 +251,16 @@ input:focus {
 .player-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 10px 12px;
   border-radius: 14px;
   background: var(--surface);
   border: 2px solid var(--border);
   box-shadow: var(--shadow-sm);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.player-row:hover {
+  transform: translateY(-1px);
 }
 .player-row.is-drawer {
   border-color: var(--accent);
@@ -197,16 +268,23 @@ input:focus {
   box-shadow: 0 4px 14px rgba(247, 147, 30, 0.2);
 }
 .player-avatar {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   color: white;
   font-weight: 800;
+  font-size: 1.05rem;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 0 0 2px white, 0 0 0 3px rgba(0, 0, 0, 0.06);
+  /* per-player ring color set inline (matches their assigned color) */
+}
+.player-avatar-img {
+  object-fit: cover;
+  background: white;
+  border-style: solid;
+  border-width: 2px;
 }
 .player-name {
   flex: 1;

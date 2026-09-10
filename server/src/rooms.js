@@ -73,7 +73,7 @@ export function deleteRoom(roomId) {
   rooms.delete(roomId);
 }
 
-export function addPlayer(room, { socketId, username, clientId }) {
+export function addPlayer(room, { socketId, username, clientId, avatar }) {
   const color = AVATAR_COLORS[room.players.length % AVATAR_COLORS.length];
   const player = {
     socketId,
@@ -81,6 +81,7 @@ export function addPlayer(room, { socketId, username, clientId }) {
     username,
     score: 0,
     color,
+    avatar: avatar || null, // player-drawn PNG data URL, or null for the default colored-initial avatar
     hasGuessedCorrectly: false,
     connected: true,
   };
@@ -158,6 +159,7 @@ export function publicRoomState(room) {
       username: p.username,
       score: p.score,
       color: p.color,
+      avatar: p.avatar,
       connected: p.connected,
       hasGuessedCorrectly: p.hasGuessedCorrectly,
     })),
