@@ -10,6 +10,13 @@ export const ROUNDS_PER_PLAYER = 2; // each player draws this many times per gam
 export const MIN_PLAYERS_TO_START = 2;
 // Overridable via env for testing; production should just use the default.
 export const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS) || 25_000;
+// Chance any given round is flagged as a surprise double-points round --
+// a little unpredictability in the scoreboard race, revealed at the
+// round-start countdown rather than announced ahead of time. Overridable
+// via env for testing (e.g. force it to 1 to always trigger).
+export const DOUBLE_POINTS_CHANCE = process.env.DOUBLE_POINTS_CHANCE !== undefined
+  ? Number(process.env.DOUBLE_POINTS_CHANCE)
+  : 0.25;
 export const AVATAR_COLORS = [
   '#f94144', '#f3722c', '#f8961e', '#f9c74f', '#90be6d',
   '#43aa8b', '#4d908e', '#577590', '#277da1', '#9b5de5',
@@ -60,6 +67,9 @@ export function createRoom(roomId) {
     roundLengthMs: ROUND_LENGTH_MS, // per-room, host-configurable copy of the default
     roundsPerPlayer: ROUNDS_PER_PLAYER, // per-room, host-configurable copy of the default
     teamsEnabled: false, // co-op scoring only -- turn rotation is unaffected either way
+    isDoubleRound: false, // rolled fresh each round in selectWord()
+    fastestGuess: null, // { username, elapsedMs } -- fastest correct guess of the whole game, for the end-game "Fastest Gun" superlative
+    scoreHistory: [], // one snapshot per completed round: [{ clientId, score }], for the "Comeback Kid" superlative
   };
   rooms.set(roomId, room);
   return room;
@@ -92,6 +102,7 @@ export function addPlayer(room, { socketId, username, clientId, avatar, team }) 
     team: team ?? null, // 'red' | 'blue' | null -- only meaningful while room.teamsEnabled
     hasGuessedCorrectly: false,
     connected: true,
+    drawerHits: 0, // correct guesses earned while THIS player was drawing, across the whole game -- for "Master Doodler"
   };
   room.players.push(player);
   if (!room.hostId) room.hostId = socketId;

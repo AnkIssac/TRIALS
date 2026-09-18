@@ -5,11 +5,12 @@ import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 
 import { WORD_LIST, pickRandomWords, parseCustomWordList, MIN_CUSTOM_WORDS } from './words.js';
-import { calcPoints, normalize, closenessHint, DRAWER_POINTS_PER_GUESSER } from './scoring.js';
+import { calcPoints, normalize, closenessHint, computeSuperlatives, DRAWER_POINTS_PER_GUESSER } from './scoring.js';
 import {
   CHOICE_TIMEOUT_MS,
   MIN_PLAYERS_TO_START,
   RECONNECT_GRACE_MS,
+  DOUBLE_POINTS_CHANCE,
   generateRoomId,
   createRoom,
   getRoom,
@@ -153,6 +154,7 @@ function sendRoundCatchUp(socket, room) {
       roundNumber: room.roundNumber,
       maxRounds: room.maxRounds,
       hint: buildHintMask(room.currentWord, room.revealedHintIndices),
+      doublePoints: room.isDoubleRound,
       // no roundStartedAt sent -- client just starts its local countdown
       // from timeLimit; being a few seconds generous is fine for an MVP.
     });
@@ -212,6 +214,7 @@ function selectWord(roomId, word) {
   room.strokes = [];
   room.strokeActionStarts = [];
   room.revealedHintIndices = new Set();
+  room.isDoubleRound = Math.random() < DOUBLE_POINTS_CHANCE;
   clearHintTimers(room);
   room.players.forEach((p) => {
     p.hasGuessedCorrectly = false;
@@ -224,6 +227,7 @@ function selectWord(roomId, word) {
     roundNumber: room.roundNumber,
     maxRounds: room.maxRounds,
     hint: buildHintMask(word, room.revealedHintIndices),
+    doublePoints: room.isDoubleRound,
   });
   io.to(drawer.socketId).emit('round:word', { word });
   broadcastRoomState(roomId);
@@ -243,14 +247,20 @@ function endRound(roomId, reason) {
   clearHintTimers(room);
 
   const revealedWord = room.currentWord;
+  const finishedStrokes = room.strokes; // captured before clearing, for the round-end recap replay
+  const wasDoubleRound = room.isDoubleRound;
   room.phase = 'round-end';
   room.strokes = [];
   room.strokeActionStarts = [];
+  room.isDoubleRound = false;
+  room.scoreHistory.push(room.players.map((p) => ({ clientId: p.clientId, score: p.score })));
 
   io.to(roomId).emit('round:end', {
     word: revealedWord,
     reason,
     scores: room.players.map((p) => ({ socketId: p.socketId, username: p.username, score: p.score, team: p.team })),
+    strokes: finishedStrokes,
+    doublePoints: wasDoubleRound,
   });
   broadcastRoomState(roomId);
 
@@ -280,6 +290,7 @@ function endGame(roomId) {
     finalScores: [...room.players]
       .sort((a, b) => b.score - a.score)
       .map((p) => ({ socketId: p.socketId, username: p.username, score: p.score, color: p.color, team: p.team })),
+    superlatives: computeSuperlatives(room),
   });
   broadcastRoomState(roomId);
 }
@@ -436,11 +447,15 @@ io.on('connection', (socket) => {
       p.score = 0;
       p.hasGuessedCorrectly = false;
       p.team = room.teamsEnabled ? (i % 2 === 0 ? 'red' : 'blue') : null;
+      p.drawerHits = 0;
     });
     room.currentDrawerIndex = -1;
     room.roundNumber = 0;
     room.maxRounds = room.players.length * room.roundsPerPlayer;
     room.usedWords.clear();
+    room.isDoubleRound = false;
+    room.fastestGuess = null;
+    room.scoreHistory = [];
 
     startNextRound(roomId);
   });
@@ -595,10 +610,16 @@ io.on('connection', (socket) => {
 
     if (isCorrect) {
       const elapsedMs = Date.now() - room.roundStartedAt;
-      const points = calcPoints(elapsedMs, room.roundLengthMs);
+      const multiplier = room.isDoubleRound ? 2 : 1;
+      const points = calcPoints(elapsedMs, room.roundLengthMs) * multiplier;
       player.score += points;
       player.hasGuessedCorrectly = true;
-      drawer.score += DRAWER_POINTS_PER_GUESSER;
+      drawer.score += DRAWER_POINTS_PER_GUESSER * multiplier;
+      drawer.drawerHits = (drawer.drawerHits || 0) + 1;
+
+      if (!room.fastestGuess || elapsedMs < room.fastestGuess.elapsedMs) {
+        room.fastestGuess = { username: player.username, elapsedMs };
+      }
 
       socket.emit('chat:message', {
         username: player.username,

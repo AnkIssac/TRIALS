@@ -41,7 +41,9 @@ function throttle(fn, ms) {
   };
 }
 
-function drawLine(ctx, from, to, color, width) {
+// Exported so DrawingReplay.jsx can render the exact same strokes/fills
+// without duplicating the flood-fill algorithm or the eraser blend mode.
+export function drawLine(ctx, from, to, color, width) {
   ctx.globalCompositeOperation = color === 'eraser' ? 'destination-out' : 'source-over';
   ctx.strokeStyle = color === 'eraser' ? 'rgba(0,0,0,1)' : color;
   ctx.lineWidth = width;
@@ -53,7 +55,7 @@ function drawLine(ctx, from, to, color, width) {
   ctx.stroke();
 }
 
-function fillWhite(ctx, w, h) {
+export function fillWhite(ctx, w, h) {
   ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, w, h);
@@ -76,7 +78,7 @@ function pixelMatches(data, idx, [r, g, b, a], tolerance) {
 // contiguous pixel close enough in color -- a tolerance so it doesn't stop
 // dead at an anti-aliased stroke edge) with the chosen color. xFrac/yFrac
 // are 0-1 fractions of THIS canvas, converted to its own pixel space here.
-function floodFill(ctx, xFrac, yFrac, fillHex, canvasW, canvasH) {
+export function floodFill(ctx, xFrac, yFrac, fillHex, canvasW, canvasH) {
   const x0 = Math.round(xFrac * canvasW);
   const y0 = Math.round(yFrac * canvasH);
   if (x0 < 0 || y0 < 0 || x0 >= canvasW || y0 >= canvasH) return;
@@ -151,7 +153,7 @@ function replayActions(ctx, actions, canvasW, canvasH) {
   }
 }
 
-export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes }) {
+export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes, doublePoints }) {
   const canvasRef = useRef(null);
   const canvasWrapRef = useRef(null);
   const brushRingRef = useRef(null);
@@ -438,7 +440,7 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
         />
         <div className="brush-ring" ref={brushRingRef} aria-hidden="true" />
         {!isDrawer && drawingLabel && <div className="canvas-overlay-label">{drawingLabel}</div>}
-        <RoundCountdown />
+        <RoundCountdown doublePoints={doublePoints} />
       </div>
 
       {isDrawer && (

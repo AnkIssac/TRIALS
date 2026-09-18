@@ -9,12 +9,13 @@ import * as sound from '../utils/sound.js';
 const STEPS = ['3', '2', '1', 'Draw!'];
 const STEP_MS = 550;
 
-export default function RoundCountdown() {
+export default function RoundCountdown({ doublePoints }) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
     if (index === 0) {
       sound.playTick();
+      if (doublePoints) sound.playDoublePoints();
     } else if (index === STEPS.length - 1) {
       sound.playRoundStart();
     } else if (index < STEPS.length) {
@@ -27,13 +28,15 @@ export default function RoundCountdown() {
     }
     const t = setTimeout(() => setIndex((i) => i + 1), STEP_MS);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
   const label = STEPS[index];
   if (label === undefined) return null;
 
   return (
-    <div className="round-countdown">
+    <div className={`round-countdown ${doublePoints ? 'round-countdown-double' : ''}`}>
+      {doublePoints && <div className="double-points-badge">⚡ Double Points Round! ⚡</div>}
       <AnimatePresence mode="wait">
         <motion.span
           key={label}

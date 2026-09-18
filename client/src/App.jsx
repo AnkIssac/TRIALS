@@ -10,6 +10,7 @@ import Timer from './components/Timer.jsx';
 import Confetti from './components/Confetti.jsx';
 import Reactions from './components/Reactions.jsx';
 import ReactionBar from './components/ReactionBar.jsx';
+import DrawingReplay from './components/DrawingReplay.jsx';
 import * as sound from './utils/sound.js';
 
 let msgIdCounter = 0;
@@ -79,8 +80,10 @@ export default function App() {
   const [roundKey, setRoundKey] = useState(0);
   const [strokeHistory, setStrokeHistory] = useState(null);
 
+  const [isDoubleRound, setIsDoubleRound] = useState(false);
   const [roundEndInfo, setRoundEndInfo] = useState(null);
   const [finalScores, setFinalScores] = useState(null);
+  const [superlatives, setSuperlatives] = useState(null);
   const [hintMask, setHintMask] = useState(null);
   const [confetti, setConfetti] = useState({ key: 0, big: false });
   const [muted, setMutedState] = useState(() => sound.isMuted());
@@ -142,7 +145,7 @@ export default function App() {
 
     const onWordChoices = ({ choices }) => setWordChoices(choices);
 
-    const onRoundStart = ({ wordLength: wl, timeLimit: tl, hint }) => {
+    const onRoundStart = ({ wordLength: wl, timeLimit: tl, hint, doublePoints }) => {
       setWordChoices(null);
       setMyWord(null);
       setWordLength(wl);
@@ -150,6 +153,7 @@ export default function App() {
       setRoundEndInfo(null);
       setStrokeHistory(null);
       setHintMask(hint ?? null);
+      setIsDoubleRound(!!doublePoints);
       setRoundKey((k) => k + 1);
       sound.playRoundStart();
     };
@@ -171,14 +175,16 @@ export default function App() {
       }
     };
 
-    const onRoundEnd = ({ word, scores, reason }) => {
-      setRoundEndInfo({ word, scores, reason });
+    const onRoundEnd = ({ word, scores, reason, strokes, doublePoints }) => {
+      setRoundEndInfo({ word, scores, reason, strokes, doublePoints });
       setMyWord(null);
       setWordChoices(null);
+      setIsDoubleRound(false);
     };
 
-    const onGameEnd = ({ finalScores: fs }) => {
+    const onGameEnd = ({ finalScores: fs, superlatives: supers }) => {
       setFinalScores(fs);
+      setSuperlatives(supers ?? null);
       setRoundEndInfo(null);
       sound.playVictory();
       fireConfetti(true);
@@ -288,6 +294,25 @@ export default function App() {
               <span className="team-score-chip team-blue">🔵 Blue: {roomState.teamScores.blue}</span>
             </div>
           )}
+          {superlatives && superlatives.length > 0 && (
+            <ul className="superlatives">
+              {superlatives.map((s, i) => (
+                <motion.li
+                  key={s.title}
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2 + i * 0.15 }}
+                >
+                  <span className="superlative-emoji">{s.emoji}</span>
+                  <span className="superlative-body">
+                    <span className="superlative-title">{s.title}</span>
+                    <span className="superlative-winner">{s.username}</span>
+                    <span className="superlative-detail">{s.detail}</span>
+                  </span>
+                </motion.li>
+              ))}
+            </ul>
+          )}
           <ol className="final-scores">
             {finalScores.map((p, i) => (
               <motion.li
@@ -338,6 +363,7 @@ export default function App() {
             <span className="team-score-chip team-blue">🔵 {roomState.teamScores.blue}</span>
           </div>
         )}
+        {phase === 'drawing' && isDoubleRound && <div className="double-points-pill">⚡ 2x Points!</div>}
         {phase === 'drawing' && <Timer timeLimitMs={timeLimit} roundKey={roundKey} onTick={sound.playTick} />}
         {phase === 'drawing' && (
           <div className="word-hint">
@@ -406,7 +432,13 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <Canvas socket={socket} isDrawer={isDrawer} initialStrokes={strokeHistory} drawingLabel="Watch the artist!" />
+                <Canvas
+                  socket={socket}
+                  isDrawer={isDrawer}
+                  initialStrokes={strokeHistory}
+                  drawingLabel="Watch the artist!"
+                  doublePoints={isDoubleRound}
+                />
               </motion.div>
             )}
 
@@ -421,7 +453,9 @@ export default function App() {
                 <div className="round-end-banner">
                   <h2>The word was:</h2>
                   <p className="revealed-word">{roundEndInfo.word}</p>
+                  {roundEndInfo.doublePoints && <p className="double-points-recap">⚡ That was a Double Points round!</p>}
                   {roundEndInfo.reason === 'drawer-left' && <p className="hint">The drawer disconnected.</p>}
+                  <DrawingReplay strokes={roundEndInfo.strokes} />
                   <p className="hint">Next round starting soon...</p>
                 </div>
               </motion.div>

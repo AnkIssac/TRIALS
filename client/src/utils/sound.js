@@ -83,6 +83,15 @@ export function playTick() {
   tone(ctx, { freq: 880, durationSec: 0.05, type: 'square', gain: 0.05 });
 }
 
+export function playDoublePoints() {
+  const ctx = getContext();
+  if (!ctx) return;
+  const notes = [659.25, 830.61, 987.77]; // E5 G#5 B5 -- a brighter, more excited sting than the plain round-start chime
+  notes.forEach((freq, i) => {
+    tone(ctx, { freq, durationSec: 0.16, type: 'square', gain: 0.09, delaySec: i * 0.07 });
+  });
+}
+
 export function playVictory() {
   const ctx = getContext();
   if (!ctx) return;

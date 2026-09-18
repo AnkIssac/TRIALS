@@ -485,6 +485,7 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow-y: auto; /* the round-end drawing replay can be taller than a short viewport has room for */
 }
 .waiting-message {
   text-align: center;
@@ -582,6 +583,40 @@ input:focus {
 .countdown-step.countdown-go {
   color: var(--accent);
   background: rgba(36, 27, 51, 0.65);
+}
+.round-countdown-double .countdown-step {
+  color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(247, 147, 30, 0.5);
+}
+.double-points-badge {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, var(--accent), var(--pop));
+  color: white;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 6px 16px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: var(--shadow-md);
+  animation: pulse 1s infinite;
+}
+/* ---------- Double points (in-round + recap) ---------- */
+.double-points-pill {
+  background: linear-gradient(135deg, var(--accent), var(--pop));
+  color: white;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 7px 14px;
+  border-radius: 999px;
+  animation: pulse 1.4s infinite;
+}
+.double-points-recap {
+  color: var(--accent);
+  font-weight: 800;
+  margin: -4px 0 4px;
 }
 .toolbar {
   display: flex;
@@ -714,6 +749,93 @@ input:focus {
 }
 .game-end-card {
   max-width: 480px;
+  max-height: calc(100dvh - 48px); /* superlatives + a long final-scores list can outgrow a short viewport */
+  overflow-y: auto;
+}
+
+/* ---------- Drawing replay (round-end recap) ---------- */
+.drawing-replay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0;
+}
+.drawing-replay-canvas-wrap {
+  position: relative;
+  width: min(100%, 360px);
+  aspect-ratio: 4 / 3;
+  background: white;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.drawing-replay-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.drawing-replay-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(36, 27, 51, 0.65);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+.drawing-replay-again {
+  padding: 7px 14px;
+  font-size: 0.8rem;
+  box-shadow: none;
+}
+
+/* ---------- End-game superlatives ---------- */
+.superlatives {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.superlatives li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff7e9, #fff1da);
+  border: 2px solid #ffe3ad;
+  text-align: left;
+}
+.superlative-emoji {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+.superlative-body {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+.superlative-title {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+}
+.superlative-winner {
+  font-weight: 800;
+}
+.superlative-detail {
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 .final-scores {
   list-style: none;

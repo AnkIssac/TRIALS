@@ -64,3 +64,67 @@ export function closenessHint(guessNormalized, wordNormalized) {
   if (distance === 0 || distance > threshold) return null;
   return distance === 1 ? 'So close! Just one letter off.' : 'Getting warm!';
 }
+
+/**
+ * End-of-game "superlative" awards, purely cosmetic (no effect on final
+ * rank) -- computed from stats already tracked during play: the single
+ * fastest correct guess of the game, a per-round score snapshot (for
+ * "who climbed the most since round 1"), and how many correct guessers
+ * each player earned while they were the drawer. Matches players by
+ * clientId (not socketId) so a mid-game reconnect doesn't disqualify
+ * someone from Comeback Kid.
+ */
+export function computeSuperlatives(room) {
+  const superlatives = [];
+
+  if (room.fastestGuess) {
+    superlatives.push({
+      title: 'Fastest Gun',
+      emoji: '⚡',
+      username: room.fastestGuess.username,
+      detail: `Guessed in ${(room.fastestGuess.elapsedMs / 1000).toFixed(1)}s`,
+    });
+  }
+
+  if (room.scoreHistory.length >= 2) {
+    const first = room.scoreHistory[0];
+    const final = room.scoreHistory[room.scoreHistory.length - 1];
+    const rankOf = (snapshot, clientId) => {
+      const sorted = [...snapshot].sort((a, b) => b.score - a.score);
+      return sorted.findIndex((s) => s.clientId === clientId);
+    };
+    let best = null;
+    for (const p of room.players) {
+      const startRank = rankOf(first, p.clientId);
+      const endRank = rankOf(final, p.clientId);
+      if (startRank === -1 || endRank === -1) continue;
+      const improvement = startRank - endRank; // positive = moved up the standings
+      if (improvement > 0 && (!best || improvement > best.improvement)) {
+        best = { username: p.username, improvement };
+      }
+    }
+    if (best) {
+      superlatives.push({
+        title: 'Comeback Kid',
+        emoji: '📈',
+        username: best.username,
+        detail: `Climbed ${best.improvement} spot${best.improvement === 1 ? '' : 's'} since round 1`,
+      });
+    }
+  }
+
+  const topDoodler = room.players.reduce(
+    (best, p) => ((p.drawerHits || 0) > (best?.drawerHits || 0) ? p : best),
+    null
+  );
+  if (topDoodler && topDoodler.drawerHits > 0) {
+    superlatives.push({
+      title: 'Master Doodler',
+      emoji: '🎨',
+      username: topDoodler.username,
+      detail: `${topDoodler.drawerHits} correct guess${topDoodler.drawerHits === 1 ? '' : 'es'} on their drawings`,
+    });
+  }
+
+  return superlatives;
+}
