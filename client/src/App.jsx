@@ -12,6 +12,7 @@ import Reactions from './components/Reactions.jsx';
 import ReactionBar from './components/ReactionBar.jsx';
 import DrawingReplay from './components/DrawingReplay.jsx';
 import * as sound from './utils/sound.js';
+import { getModifierInfo } from './utils/modifiers.js';
 
 let msgIdCounter = 0;
 const nextMsgId = () => `m${++msgIdCounter}-${Date.now()}`;
@@ -80,7 +81,7 @@ export default function App() {
   const [roundKey, setRoundKey] = useState(0);
   const [strokeHistory, setStrokeHistory] = useState(null);
 
-  const [isDoubleRound, setIsDoubleRound] = useState(false);
+  const [roundModifier, setRoundModifier] = useState(null);
   const [roundEndInfo, setRoundEndInfo] = useState(null);
   const [finalScores, setFinalScores] = useState(null);
   const [superlatives, setSuperlatives] = useState(null);
@@ -145,7 +146,7 @@ export default function App() {
 
     const onWordChoices = ({ choices }) => setWordChoices(choices);
 
-    const onRoundStart = ({ wordLength: wl, timeLimit: tl, hint, doublePoints }) => {
+    const onRoundStart = ({ wordLength: wl, timeLimit: tl, hint, modifier }) => {
       setWordChoices(null);
       setMyWord(null);
       setWordLength(wl);
@@ -153,7 +154,7 @@ export default function App() {
       setRoundEndInfo(null);
       setStrokeHistory(null);
       setHintMask(hint ?? null);
-      setIsDoubleRound(!!doublePoints);
+      setRoundModifier(modifier ?? null);
       setRoundKey((k) => k + 1);
       sound.playRoundStart();
     };
@@ -175,11 +176,11 @@ export default function App() {
       }
     };
 
-    const onRoundEnd = ({ word, scores, reason, strokes, doublePoints }) => {
-      setRoundEndInfo({ word, scores, reason, strokes, doublePoints });
+    const onRoundEnd = ({ word, scores, reason, strokes, modifier }) => {
+      setRoundEndInfo({ word, scores, reason, strokes, modifier });
       setMyWord(null);
       setWordChoices(null);
-      setIsDoubleRound(false);
+      setRoundModifier(null);
     };
 
     const onGameEnd = ({ finalScores: fs, superlatives: supers }) => {
@@ -255,6 +256,8 @@ export default function App() {
   const isDrawer = roomState?.drawerId === mySocketId;
   const me = roomState?.players.find((p) => p.socketId === mySocketId);
   const isSpectator = !!roomState?.spectators?.some((s) => s.socketId === mySocketId);
+  const modifierInfo = getModifierInfo(roundModifier);
+  const roundEndModifierInfo = roundEndInfo ? getModifierInfo(roundEndInfo.modifier) : null;
 
   if (!inRoom || phase === 'lobby') {
     return (
@@ -363,7 +366,11 @@ export default function App() {
             <span className="team-score-chip team-blue">🔵 {roomState.teamScores.blue}</span>
           </div>
         )}
-        {phase === 'drawing' && isDoubleRound && <div className="double-points-pill">⚡ 2x Points!</div>}
+        {phase === 'drawing' && modifierInfo && (
+          <div className="modifier-pill">
+            {modifierInfo.emoji} {modifierInfo.pillLabel}
+          </div>
+        )}
         {phase === 'drawing' && <Timer timeLimitMs={timeLimit} roundKey={roundKey} onTick={sound.playTick} />}
         {phase === 'drawing' && (
           <div className="word-hint">
@@ -437,7 +444,7 @@ export default function App() {
                   isDrawer={isDrawer}
                   initialStrokes={strokeHistory}
                   drawingLabel="Watch the artist!"
-                  doublePoints={isDoubleRound}
+                  modifier={roundModifier}
                 />
               </motion.div>
             )}
@@ -453,7 +460,11 @@ export default function App() {
                 <div className="round-end-banner">
                   <h2>The word was:</h2>
                   <p className="revealed-word">{roundEndInfo.word}</p>
-                  {roundEndInfo.doublePoints && <p className="double-points-recap">⚡ That was a Double Points round!</p>}
+                  {roundEndModifierInfo && (
+                    <p className="modifier-recap">
+                      {roundEndModifierInfo.emoji} {roundEndModifierInfo.recap}
+                    </p>
+                  )}
                   {roundEndInfo.reason === 'drawer-left' && <p className="hint">The drawer disconnected.</p>}
                   <DrawingReplay strokes={roundEndInfo.strokes} />
                   <p className="hint">Next round starting soon...</p>

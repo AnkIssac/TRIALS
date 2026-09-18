@@ -17,6 +17,15 @@ const COLORS = [
 // an 800px-wide canvas) so "medium" looks medium-sized on any screen.
 const WIDTHS = [0.004, 0.0075, 0.015, 0.025];
 const WIDTH_PREVIEW_BASE = 800; // just for sizing the toolbar's preview dots
+const CHAOS_PALETTE_SIZE = 4;
+
+// A "chaos palette" round hands the drawer a random handful of colors
+// instead of the full set -- picked once per round (called from a lazy
+// useState initializer, so it's stable for the round instead of reshuffling
+// on every render).
+function pickChaosColors() {
+  return [...COLORS].sort(() => Math.random() - 0.5).slice(0, CHAOS_PALETTE_SIZE);
+}
 
 function throttle(fn, ms) {
   let last = 0;
@@ -153,7 +162,7 @@ function replayActions(ctx, actions, canvasW, canvasH) {
   }
 }
 
-export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes, doublePoints }) {
+export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes, modifier }) {
   const canvasRef = useRef(null);
   const canvasWrapRef = useRef(null);
   const brushRingRef = useRef(null);
@@ -170,9 +179,13 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes,
   // just wiping it, since resizing a canvas element clears its pixels.
   const strokeLogRef = useRef([]);
 
-  const [color, setColor] = useState('#1e1e1e');
+  // A random subset of colors on a "chaos palette" round, or the full set
+  // otherwise -- picked once per round (lazy initializer), not per render.
+  const [palette] = useState(() => (modifier === 'chaos-palette' ? pickChaosColors() : COLORS));
+  const [color, setColor] = useState(palette[0]);
   const [width, setWidth] = useState(WIDTHS[1]);
   const [tool, setTool] = useState('pen'); // 'pen' | 'fill' | 'eraser'
+  const noUndoOrEraser = modifier === 'steady-hand';
 
   const activeColor = tool === 'eraser' ? 'eraser' : color;
 
@@ -440,7 +453,7 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes,
         />
         <div className="brush-ring" ref={brushRingRef} aria-hidden="true" />
         {!isDrawer && drawingLabel && <div className="canvas-overlay-label">{drawingLabel}</div>}
-        <RoundCountdown doublePoints={doublePoints} />
+        <RoundCountdown modifier={modifier} />
       </div>
 
       {isDrawer && (
@@ -461,18 +474,20 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes,
             >
               🪣 Fill
             </button>
-            <button
-              className={`tool-btn ${tool === 'eraser' ? 'active' : ''}`}
-              onClick={() => setTool('eraser')}
-              aria-label="Eraser"
-            >
-              🧽 Eraser
-            </button>
+            {!noUndoOrEraser && (
+              <button
+                className={`tool-btn ${tool === 'eraser' ? 'active' : ''}`}
+                onClick={() => setTool('eraser')}
+                aria-label="Eraser"
+              >
+                🧽 Eraser
+              </button>
+            )}
           </div>
           <div className="toolbar-group">
             <span className="toolbar-label">Color</span>
             <span className="current-preview" style={{ background: color }} aria-hidden="true" />
-            {COLORS.map((c) => (
+            {palette.map((c) => (
               <button
                 key={c}
                 className={`swatch ${color === c ? 'active' : ''}`}
@@ -501,9 +516,11 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes,
             </div>
           )}
           <div className="toolbar-group">
-            <button className="tool-btn" onClick={handleUndo}>
-              ↩️ Undo
-            </button>
+            {!noUndoOrEraser && (
+              <button className="tool-btn" onClick={handleUndo}>
+                ↩️ Undo
+              </button>
+            )}
             <button className="tool-btn danger" onClick={handleClear}>
               🗑️ Clear
             </button>

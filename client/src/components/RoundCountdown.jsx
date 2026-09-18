@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import * as sound from '../utils/sound.js';
+import { getModifierInfo } from '../utils/modifiers.js';
 
 // "3... 2... 1... Draw!" -- purely cosmetic, doesn't touch the (server-
 // authoritative) round timer, so it never costs the round any real time.
@@ -9,13 +10,14 @@ import * as sound from '../utils/sound.js';
 const STEPS = ['3', '2', '1', 'Draw!'];
 const STEP_MS = 550;
 
-export default function RoundCountdown({ doublePoints }) {
+export default function RoundCountdown({ modifier }) {
   const [index, setIndex] = useState(0);
+  const info = getModifierInfo(modifier);
 
   useEffect(() => {
     if (index === 0) {
       sound.playTick();
-      if (doublePoints) sound.playDoublePoints();
+      if (info) sound.playModifierReveal();
     } else if (index === STEPS.length - 1) {
       sound.playRoundStart();
     } else if (index < STEPS.length) {
@@ -35,8 +37,12 @@ export default function RoundCountdown({ doublePoints }) {
   if (label === undefined) return null;
 
   return (
-    <div className={`round-countdown ${doublePoints ? 'round-countdown-double' : ''}`}>
-      {doublePoints && <div className="double-points-badge">⚡ Double Points Round! ⚡</div>}
+    <div className={`round-countdown ${info ? 'round-countdown-modifier' : ''}`}>
+      {info && (
+        <div className="modifier-badge">
+          {info.emoji} {info.countdownLabel}
+        </div>
+      )}
       <AnimatePresence mode="wait">
         <motion.span
           key={label}

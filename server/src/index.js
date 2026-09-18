@@ -10,7 +10,9 @@ import {
   CHOICE_TIMEOUT_MS,
   MIN_PLAYERS_TO_START,
   RECONNECT_GRACE_MS,
-  DOUBLE_POINTS_CHANCE,
+  ROUND_MODIFIERS,
+  MODIFIER_CHANCE,
+  BLITZ_MIN_ROUND_MS,
   generateRoomId,
   createRoom,
   getRoom,
@@ -116,7 +118,7 @@ function scheduleHints(roomId, word) {
   const drawer = getDrawer(room);
 
   hintIndices.forEach((idx, i) => {
-    const delay = room.roundLengthMs * (HINT_FRACTIONS[i] ?? HINT_FRACTIONS[HINT_FRACTIONS.length - 1]);
+    const delay = room.currentRoundLengthMs * (HINT_FRACTIONS[i] ?? HINT_FRACTIONS[HINT_FRACTIONS.length - 1]);
     const timer = setTimeout(() => {
       const r = getRoom(roomId);
       // Bail if the round has already moved on (ended early, next word, etc).
@@ -150,11 +152,11 @@ function sendRoundCatchUp(socket, room) {
     socket.emit('round:start', {
       drawerId: drawer.socketId,
       wordLength: room.currentWord.length,
-      timeLimit: room.roundLengthMs,
+      timeLimit: room.currentRoundLengthMs,
       roundNumber: room.roundNumber,
       maxRounds: room.maxRounds,
       hint: buildHintMask(room.currentWord, room.revealedHintIndices),
-      doublePoints: room.isDoubleRound,
+      modifier: room.roundModifier,
       // no roundStartedAt sent -- client just starts its local countdown
       // from timeLimit; being a few seconds generous is fine for an MVP.
     });
@@ -214,7 +216,12 @@ function selectWord(roomId, word) {
   room.strokes = [];
   room.strokeActionStarts = [];
   room.revealedHintIndices = new Set();
-  room.isDoubleRound = Math.random() < DOUBLE_POINTS_CHANCE;
+  room.roundModifier =
+    Math.random() < MODIFIER_CHANCE ? ROUND_MODIFIERS[Math.floor(Math.random() * ROUND_MODIFIERS.length)] : null;
+  room.currentRoundLengthMs =
+    room.roundModifier === 'blitz'
+      ? Math.max(BLITZ_MIN_ROUND_MS, Math.round(room.roundLengthMs / 2))
+      : room.roundLengthMs;
   clearHintTimers(room);
   room.players.forEach((p) => {
     p.hasGuessedCorrectly = false;
@@ -223,17 +230,17 @@ function selectWord(roomId, word) {
   io.to(roomId).emit('round:start', {
     drawerId: drawer.socketId,
     wordLength: word.length,
-    timeLimit: room.roundLengthMs,
+    timeLimit: room.currentRoundLengthMs,
     roundNumber: room.roundNumber,
     maxRounds: room.maxRounds,
     hint: buildHintMask(word, room.revealedHintIndices),
-    doublePoints: room.isDoubleRound,
+    modifier: room.roundModifier,
   });
   io.to(drawer.socketId).emit('round:word', { word });
   broadcastRoomState(roomId);
 
   clearTimeout(room.roundTimer);
-  room.roundTimer = setTimeout(() => endRound(roomId, 'timeout'), room.roundLengthMs);
+  room.roundTimer = setTimeout(() => endRound(roomId, 'timeout'), room.currentRoundLengthMs);
   scheduleHints(roomId, word);
 }
 
@@ -248,11 +255,11 @@ function endRound(roomId, reason) {
 
   const revealedWord = room.currentWord;
   const finishedStrokes = room.strokes; // captured before clearing, for the round-end recap replay
-  const wasDoubleRound = room.isDoubleRound;
+  const wasModifier = room.roundModifier;
   room.phase = 'round-end';
   room.strokes = [];
   room.strokeActionStarts = [];
-  room.isDoubleRound = false;
+  room.roundModifier = null;
   room.scoreHistory.push(room.players.map((p) => ({ clientId: p.clientId, score: p.score })));
 
   io.to(roomId).emit('round:end', {
@@ -260,7 +267,7 @@ function endRound(roomId, reason) {
     reason,
     scores: room.players.map((p) => ({ socketId: p.socketId, username: p.username, score: p.score, team: p.team })),
     strokes: finishedStrokes,
-    doublePoints: wasDoubleRound,
+    modifier: wasModifier,
   });
   broadcastRoomState(roomId);
 
@@ -453,7 +460,8 @@ io.on('connection', (socket) => {
     room.roundNumber = 0;
     room.maxRounds = room.players.length * room.roundsPerPlayer;
     room.usedWords.clear();
-    room.isDoubleRound = false;
+    room.roundModifier = null;
+    room.currentRoundLengthMs = room.roundLengthMs;
     room.fastestGuess = null;
     room.scoreHistory = [];
 
@@ -568,6 +576,7 @@ io.on('connection', (socket) => {
 
     const drawer = getDrawer(room);
     if (!drawer || drawer.socketId !== socket.id) return;
+    if (room.roundModifier === 'steady-hand') return; // no undo this round -- mistakes are permanent
     if (room.strokeActionStarts.length === 0) return; // nothing left to undo
 
     const cutIndex = room.strokeActionStarts.pop();
@@ -610,8 +619,8 @@ io.on('connection', (socket) => {
 
     if (isCorrect) {
       const elapsedMs = Date.now() - room.roundStartedAt;
-      const multiplier = room.isDoubleRound ? 2 : 1;
-      const points = calcPoints(elapsedMs, room.roundLengthMs) * multiplier;
+      const multiplier = room.roundModifier === 'double-points' ? 2 : 1;
+      const points = calcPoints(elapsedMs, room.currentRoundLengthMs) * multiplier;
       player.score += points;
       player.hasGuessedCorrectly = true;
       drawer.score += DRAWER_POINTS_PER_GUESSER * multiplier;

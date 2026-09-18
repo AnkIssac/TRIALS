@@ -54,12 +54,20 @@ link, are in [`CLAUDE.md`](./CLAUDE.md).
 
 ## Features
 
-- **Rooms** with a shareable code, host controls, custom word lists, and
-  configurable round length / rounds-per-player
+- **Rooms** with a shareable code, a QR code + copyable join link (opens
+  straight to "type your name and hit Join," no typing a code by hand),
+  host controls, custom word lists, and configurable round length /
+  rounds-per-player
 - **Drawing tools**: pen, paint-bucket fill, eraser, color palette, stroke
-  width, undo, clear — all synced live to everyone in the room
+  width, undo, clear — all synced live to everyone in the room, plus a
+  brush-size ring that follows your cursor so you see the stroke width
+  before you commit to it
 - **Scoring**: faster correct guesses earn more points; the drawer earns a
   bonus per correct guesser; optional team mode pools scores by team
+- **Round modifiers**: a random round is occasionally flagged Double
+  Points, Blitz (half time), Steady Hand (no undo/eraser), or Chaos
+  Palette (the drawer gets a random handful of colors) — revealed at the
+  "3, 2, 1, Draw!" round-start countdown
 - **Hints**: a letter or two reveals itself as the timer runs down, and a
   guesser gets a private "so close!" nudge on a near-miss guess
 - **Player avatars**: draw your own little avatar before you join, or skip
@@ -67,6 +75,11 @@ link, are in [`CLAUDE.md`](./CLAUDE.md).
 - **Reactions**: quick-tap emoji bursts during a round, no chat needed
 - **Spectator mode**: join mid-round and watch, then hop into the next
   round whenever you're ready
+- **Round-end recap**: a fast animated replay of what was just drawn, and
+  an end-of-game awards section (Fastest Gun, Comeback Kid, Master
+  Doodler) alongside the final leaderboard
+- **Rematch**: the host can start a fresh game with the same room/players
+  right from the final scoreboard — no re-creating the room
 - **Reconnects**: your slot (score, host status, drawer turn) is held open
   for 25s if your connection drops — a refresh reclaims it silently
 - **Sound + confetti**, mutable, plus a mobile/tablet-friendly layout that

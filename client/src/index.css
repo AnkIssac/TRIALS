@@ -242,6 +242,43 @@ input:focus {
   font-size: 0.9rem;
   font-weight: 600;
 }
+
+/* ---------- Invite QR + join link ---------- */
+.invite-qr {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #faf7fd;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin: 14px 0;
+  text-align: left;
+}
+.invite-qr-canvas {
+  flex-shrink: 0;
+  width: 88px;
+  height: 88px;
+  border-radius: 10px;
+  background: white;
+  box-shadow: var(--shadow-sm);
+}
+.invite-qr-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.invite-copy-btn {
+  align-self: flex-start;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+.invite-link-text {
+  margin: 0;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
 .error-text {
   color: var(--danger);
   font-weight: 700;
@@ -584,11 +621,11 @@ input:focus {
   color: var(--accent);
   background: rgba(36, 27, 51, 0.65);
 }
-.round-countdown-double .countdown-step {
+.round-countdown-modifier .countdown-step {
   color: var(--accent);
   box-shadow: 0 0 0 3px rgba(247, 147, 30, 0.5);
 }
-.double-points-badge {
+.modifier-badge {
   position: absolute;
   top: 18px;
   left: 50%;
@@ -603,8 +640,8 @@ input:focus {
   box-shadow: var(--shadow-md);
   animation: pulse 1s infinite;
 }
-/* ---------- Double points (in-round + recap) ---------- */
-.double-points-pill {
+/* ---------- Round modifiers (in-round pill + round-end recap) ---------- */
+.modifier-pill {
   background: linear-gradient(135deg, var(--accent), var(--pop));
   color: white;
   font-weight: 800;
@@ -613,7 +650,7 @@ input:focus {
   border-radius: 999px;
   animation: pulse 1.4s infinite;
 }
-.double-points-recap {
+.modifier-recap {
   color: var(--accent);
   font-weight: 800;
   margin: -4px 0 4px;
@@ -1219,6 +1256,13 @@ input:focus {
   .room-code-display {
     font-size: 2rem;
     letter-spacing: 4px;
+  }
+  .invite-qr {
+    flex-direction: column;
+    text-align: center;
+  }
+  .invite-copy-btn {
+    align-self: center;
   }
   .reaction-bar {
     justify-content: space-between;

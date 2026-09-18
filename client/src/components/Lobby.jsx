@@ -1,8 +1,19 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PlayerList from './PlayerList.jsx';
 import AvatarPicker from './AvatarPicker.jsx';
+import InviteQR from './InviteQR.jsx';
 
 const MIN_PLAYERS_TO_START = 2;
+
+// A join link (?join=CODE, see InviteQR.jsx) pre-fills this instead of
+// making a scanning/tapping friend type a 5-char room code by hand.
+function joinCodeFromUrl() {
+  try {
+    return (new URLSearchParams(window.location.search).get('join') || '').toUpperCase();
+  } catch {
+    return '';
+  }
+}
 const ROUND_LENGTH_OPTIONS = [
   { value: 30_000, label: '30s' },
   { value: 45_000, label: '45s' },
@@ -37,9 +48,17 @@ export default function Lobby({
   onSetTeams,
 }) {
   const [username, setUsername] = useState(() => localStorage.getItem('inkblitz-username') || '');
-  const [joinCode, setJoinCode] = useState('');
+  const [joinCode, setJoinCode] = useState(joinCodeFromUrl);
   const [wordListDraft, setWordListDraft] = useState('');
   const avatarRef = useRef(null);
+  const usernameInputRef = useRef(null);
+
+  // Arrived via a join link -- the room code is already filled in, so send
+  // focus straight to the one field a friend still has to type.
+  useEffect(() => {
+    if (joinCode) usernameInputRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const persistName = (name) => {
     try {
@@ -58,6 +77,7 @@ export default function Lobby({
         <label className="field">
           <span>Your name</span>
           <input
+            ref={usernameInputRef}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             maxLength={20}
@@ -112,6 +132,7 @@ export default function Lobby({
       <h2>Room Code</h2>
       <div className="room-code-display">{roomId}</div>
       <p className="hint">Share this code with friends so they can join.</p>
+      <InviteQR roomId={roomId} />
 
       <PlayerList players={players} hostId={hostId} drawerId={null} mySocketId={mySocketId} teamsEnabled={teamsEnabled} />
 
