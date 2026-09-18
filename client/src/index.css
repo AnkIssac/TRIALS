@@ -538,6 +538,51 @@ input:focus {
   font-weight: 600;
   pointer-events: none;
 }
+
+/* Ring showing exactly how thick the current brush/eraser is, right where
+   the cursor/finger is -- positioned + sized imperatively in JS (not
+   React state) since it has to track every pointer move without
+   triggering a re-render. Hidden (opacity 0) until the first pointer
+   move/enter sets real coordinates on it. */
+.brush-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity 0.12s ease;
+}
+
+/* ---------- Round-start countdown ---------- */
+.round-countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+.countdown-step {
+  font-size: 4.5rem;
+  font-weight: 900;
+  color: white;
+  background: rgba(36, 27, 51, 0.55);
+  padding: 18px 38px;
+  border-radius: 24px;
+  text-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.countdown-step.countdown-go {
+  color: var(--accent);
+  background: rgba(36, 27, 51, 0.65);
+}
 .toolbar {
   display: flex;
   gap: 18px;
@@ -1009,6 +1054,11 @@ input:focus {
   .canvas-wrap {
     min-height: 70px;
   }
+  .countdown-step {
+    font-size: 2.2rem;
+    padding: 8px 18px;
+    border-radius: 14px;
+  }
 }
 
 /* Phone-width tightening on top of the tablet-width stacked layout above. */
@@ -1053,6 +1103,11 @@ input:focus {
   }
   .chat-form {
     padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+  .countdown-step {
+    font-size: 2.8rem;
+    padding: 12px 24px;
+    border-radius: 18px;
   }
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import RoundCountdown from './RoundCountdown.jsx';
 
 // The canvas's pixel buffer is sized to whatever rectangle its wrapper
 // actually is on THIS client -- no fixed 800x600, no letterboxing to a
@@ -153,6 +154,7 @@ function replayActions(ctx, actions, canvasW, canvasH) {
 export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes }) {
   const canvasRef = useRef(null);
   const canvasWrapRef = useRef(null);
+  const brushRingRef = useRef(null);
   const ctxRef = useRef(null);
   const isPointerDownRef = useRef(false);
   const lastPointRef = useRef(null); // my own last point, while drawing (pixel + fraction)
@@ -315,6 +317,42 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
     return { x: fx * canvas.width, y: fy * canvas.height, fx, fy };
   }, []);
 
+  // Shows a ring at the cursor/finger sized to exactly match the current
+  // brush -- so you can see how thick a line you're about to draw (or how
+  // big an area the eraser covers) before committing to the stroke.
+  const updateBrushRing = useCallback(
+    (e) => {
+      const ring = brushRingRef.current;
+      const canvas = canvasRef.current;
+      if (!ring || !canvas || !isDrawer || tool === 'fill') {
+        if (ring) ring.style.opacity = '0';
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const diameter = Math.max(width * canvas.width, 6);
+      ring.style.left = `${x}px`;
+      ring.style.top = `${y}px`;
+      ring.style.width = `${diameter}px`;
+      ring.style.height = `${diameter}px`;
+      ring.style.borderColor = tool === 'eraser' ? '#9a92ab' : color === '#ffffff' ? '#cfc7dd' : color;
+      ring.style.opacity = '1';
+    },
+    [isDrawer, tool, width, color]
+  );
+
+  const hideBrushRing = useCallback(() => {
+    if (brushRingRef.current) brushRingRef.current.style.opacity = '0';
+  }, []);
+
+  // Hide immediately (rather than waiting for the next pointer move) when
+  // switching to the fill tool or losing the pen -- otherwise a stale ring
+  // sized for the old tool lingers until the cursor next moves.
+  useEffect(() => {
+    if (!isDrawer || tool === 'fill') hideBrushRing();
+  }, [isDrawer, tool, hideBrushRing]);
+
   const handlePointerDown = (e) => {
     if (!isDrawer) return;
     const point = getCanvasCoords(e);
@@ -340,6 +378,7 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
   };
 
   const handlePointerMove = (e) => {
+    updateBrushRing(e);
     if (!isDrawer || !isPointerDownRef.current) return;
     const point = getCanvasCoords(e);
     const ctx = ctxRef.current;
@@ -392,9 +431,14 @@ export default function Canvas({ socket, isDrawer, drawingLabel, initialStrokes 
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
+          onPointerLeave={() => {
+            hideBrushRing();
+            handlePointerUp();
+          }}
         />
+        <div className="brush-ring" ref={brushRingRef} aria-hidden="true" />
         {!isDrawer && drawingLabel && <div className="canvas-overlay-label">{drawingLabel}</div>}
+        <RoundCountdown />
       </div>
 
       {isDrawer && (
